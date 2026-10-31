@@ -55,14 +55,28 @@ const AiDecideTaskComplexityAnswerSchema = z
   })
   .passthrough();
 
-const AiDecideResponseSchema = z
+const AiDecideTaskComplexityResponseSchema = z
+  .object({
+    response: z
+      .object({
+        answers: z
+          .object({
+            task_complexity: AiDecideTaskComplexityAnswerSchema,
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+    metadata: z.object({ version: z.string() }).passthrough().optional(),
+  })
+  .passthrough();
+
+const AiDecideModelResponseSchema = z
   .object({
     response: z
       .object({
         answers: z
           .object({
             model: AiDecideChoiceAnswerSchema,
-            task_complexity: AiDecideTaskComplexityAnswerSchema.optional(),
           })
           .passthrough(),
       })
@@ -135,11 +149,33 @@ export class AiDecideRouterService {
     if (!context.task) {
       throw new AiDecideRouterError(400, "ai_decide input contains no routable text");
     }
-    const currentRequest = [...context.events].reverse().find((event) => event.role === "user")?.text;
+    const currentRequest = [...context.events]
+      .reverse()
+      .find((event) => event.role === "user")?.text;
+    const currentTask = currentRequest ?? context.task;
+    const taskComplexityBody = {
+      state: {
+        task: currentTask,
+        current_request: currentTask,
+      },
+      questions: {
+        task_complexity: {
+          type: "choice" as const,
+          instructions:
+            "Classify the current request only. Choose advanced when a complete answer needs dependencies, configuration, APIs, and multiple code artifacts; architecture, debugging, or several interacting constraints. Choose standard for a focused implementation or analysis with limited moving parts. Choose simple only for short factual, creative, formatting, or explanation requests.",
+          criteria: {
+            simple: "One direct answer or artifact with little reasoning or implementation risk.",
+            standard: "Focused implementation or analysis with limited interacting requirements.",
+            advanced:
+              "Multiple implementation artifacts or interacting technical constraints where completeness and correctness require stronger reasoning.",
+          },
+        },
+      },
+      options: { version: "1.0" },
+    };
     const buildDecision = (
       decisionCandidates: readonly ServingEndpointSummary[],
-      classifyComplexity: boolean,
-      taskComplexity?: z.infer<typeof AiDecideTaskComplexitySchema>,
+      taskComplexity: z.infer<typeof AiDecideTaskComplexitySchema>,
     ) => {
       const labels = new Map(
         decisionCandidates.map((endpoint, index) => [`model_${index + 1}`, endpoint]),
@@ -154,37 +190,23 @@ export class AiDecideRouterService {
         labels,
         body: {
           state: {
-            task: context.task,
-            current_request: currentRequest ?? context.task,
+            task: currentTask,
+            current_request: currentTask,
+            ...(context.events.length > 1 ? { conversation_context: context.task } : {}),
             conversation_turns: context.events.filter((event) => event.role === "user").length,
             context_tokens: context.tokenCount,
             completion_requirement:
               "The selected model must answer the current request accurately and completely in one response. Partial or truncated output is insufficient.",
-            ...(taskComplexity ? { task_complexity: taskComplexity } : {}),
+            task_complexity: taskComplexity,
             strategy,
             candidates: decisionCandidates.map((endpoint, index) =>
               candidateState(endpoint, index + 1),
             ),
           },
           questions: {
-            ...(classifyComplexity
-              ? {
-                  task_complexity: {
-                    type: "choice" as const,
-                    instructions:
-                      "Classify the current request, not earlier conversation turns. Choose advanced when a complete answer needs dependencies, configuration, APIs, and multiple code artifacts; architecture, debugging, or several interacting constraints. Choose standard for a focused implementation or analysis with limited moving parts. Choose simple only for short factual, creative, formatting, or explanation requests.",
-                    criteria: {
-                      simple: "One direct answer or artifact with little reasoning or implementation risk.",
-                      standard: "Focused implementation or analysis with limited interacting requirements.",
-                      advanced:
-                        "Multiple implementation artifacts or interacting technical constraints where completeness and correctness require stronger reasoning.",
-                    },
-                  },
-                }
-              : {}),
             model: {
               type: "choice" as const,
-              instructions: `${strategyInstructions(strategy)}${taskComplexity ? ` The task has already been classified as ${taskComplexity}.` : ""}`,
+              instructions: `${strategyInstructions(strategy)} The task has already been classified as ${taskComplexity}.`,
               criteria,
             },
           },
@@ -194,10 +216,19 @@ export class AiDecideRouterService {
     };
     const startedAt = performance.now();
     const signal = options.signal ?? new AbortController().signal;
-    let decision = buildDecision(candidates, true);
-    let response: z.infer<typeof AiDecideResponseSchema>;
+    let decision: ReturnType<typeof buildDecision>;
+    let response: z.infer<typeof AiDecideModelResponseSchema>;
     try {
-      response = AiDecideResponseSchema.parse(
+      const taskComplexity = AiDecideTaskComplexityResponseSchema.parse(
+        await this.invoke(
+          workspaceClient,
+          taskComplexityBody,
+          signal,
+          options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        ),
+      ).response.answers.task_complexity.choice;
+      decision = buildDecision(sufficientCandidates(candidates, taskComplexity), taskComplexity);
+      response = AiDecideModelResponseSchema.parse(
         await this.invoke(
           workspaceClient,
           decision.body,
@@ -205,26 +236,6 @@ export class AiDecideRouterService {
           options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         ),
       );
-      const taskComplexity = response.response.answers.task_complexity?.choice;
-      const initialSelection = decision.labels.get(response.response.answers.model.choice);
-      if (!initialSelection) {
-        throw new AiDecideRouterError(
-          502,
-          `ai_decide selected unknown candidate ${response.response.answers.model.choice}`,
-        );
-      }
-      const sufficient = sufficientCandidates(candidates, taskComplexity);
-      if (taskComplexity && !sufficient.includes(initialSelection) && sufficient.length > 0) {
-        decision = buildDecision(sufficient, false, taskComplexity);
-        response = AiDecideResponseSchema.parse(
-          await this.invoke(
-            workspaceClient,
-            decision.body,
-            signal,
-            options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          ),
-        );
-      }
       this.setProbeValue(workspaceClient, true);
     } catch (error) {
       this.setProbeValue(workspaceClient, false);
@@ -270,10 +281,15 @@ export class AiDecideRouterService {
       return false;
     }
     const cache = this.probeCache(workspaceClient);
-    const probe = await getOrSet(cache, PROBE_KEY, () => this.loadProbe(endpoints, workspaceClient), {
-      ttl: PROBE_CACHE_TTL_MS,
-      refreshAfterWrite: (value) => this.probeTtl(value.enabled),
-    });
+    const probe = await getOrSet(
+      cache,
+      PROBE_KEY,
+      () => this.loadProbe(endpoints, workspaceClient),
+      {
+        ttl: PROBE_CACHE_TTL_MS,
+        refreshAfterWrite: (value) => this.probeTtl(value.enabled),
+      },
+    );
     return probe?.enabled ?? false;
   }
 
@@ -404,24 +420,26 @@ function modelCandidates(
       { preferSystemModels: true },
     )
     .map(({ endpoint }) => endpoint)
-    .filter((endpoint) => !families || (endpoint.family && families.includes(endpoint.family.toLowerCase())));
+    .filter(
+      (endpoint) =>
+        !families || (endpoint.family && families.includes(endpoint.family.toLowerCase())),
+    );
 }
 
 function sufficientCandidates(
   candidates: readonly ServingEndpointSummary[],
-  taskComplexity: z.infer<typeof AiDecideTaskComplexitySchema> | undefined,
+  taskComplexity: z.infer<typeof AiDecideTaskComplexitySchema>,
 ): ServingEndpointSummary[] {
-  if (!taskComplexity || taskComplexity === "simple") return [...candidates];
-  if (taskComplexity === "standard") {
-    return candidates.filter((endpoint) => endpoint.class !== ModelClass.ChatFast);
+  const classOrder = {
+    simple: [ModelClass.ChatFast, ModelClass.ChatBalanced, ModelClass.ChatThinking],
+    standard: [ModelClass.ChatBalanced, ModelClass.ChatThinking, ModelClass.ChatFast],
+    advanced: [ModelClass.ChatThinking, ModelClass.ChatBalanced, ModelClass.ChatFast],
+  }[taskComplexity];
+  for (const modelClass of classOrder) {
+    const sufficient = candidates.filter((endpoint) => endpoint.class === modelClass);
+    if (sufficient.length > 0) return sufficient;
   }
-  return candidates.filter(
-    (endpoint, index) =>
-      endpoint.class === ModelClass.ChatThinking ||
-      (index < 10 &&
-        endpoint.class === ModelClass.ChatBalanced &&
-        endpoint.profile?.quality === undefined),
-  );
+  return [...candidates];
 }
 
 function candidateState(endpoint: ServingEndpointSummary, rank: number): Record<string, unknown> {
@@ -444,7 +462,10 @@ function candidateState(endpoint: ServingEndpointSummary, rank: number): Record<
   };
 }
 
-function candidateDescription(endpoint: ServingEndpointSummary, rank: number): Record<string, unknown> {
+function candidateDescription(
+  endpoint: ServingEndpointSummary,
+  rank: number,
+): Record<string, unknown> {
   const benchmarks = candidateBenchmarks(endpoint);
   return {
     model: endpoint.name,
@@ -481,8 +502,7 @@ function strategyInstructions(strategy: AiDecideStrategy): string {
     balanced:
       "Choose the smallest and least expensive model that is still likely to answer the task accurately and completely.",
     quality: "Choose the model most likely to produce the highest-quality correct answer.",
-    cost:
-      "Choose the lowest-cost model that is still sufficient for the task. Keep premier and newer unscored models eligible when they are materially more likely to complete the request correctly. When candidates have similar expected answer quality and completeness, prefer lower cost over lower latency.",
+    cost: "Choose the lowest-cost model that is still sufficient for the task. Keep premier and newer unscored models eligible when they are materially more likely to complete the request correctly. When candidates have similar expected answer quality and completeness, prefer lower cost over lower latency.",
     latency: "Choose the fastest model that is still sufficient for the task.",
   }[strategy];
   return `${objective} Judge current_request as the work that must be completed now; use task only as conversation context, and do not let simpler earlier turns reduce the current request's difficulty. A model is sufficient only if it is likely to produce a complete, correct answer in one response. Treat partial or truncated output as insufficient. Software implementation that requires dependencies, configuration, APIs, and multiple code artifacts needs materially more quality than a short explanation, even when the request itself is concise. Optimize for the selected strategy only among sufficient candidates. Use the supplied rank, version, capability class, quality, measured latency, throughput, cost, tool, structured-output, family, and reasoning metadata. Lower normalized_response_time_ms and time_to_first_token_ms are faster; higher output_tokens_per_second and measured_quality_percentile are better. Treat a newer unscored model as potentially stronger than an older scored predecessor rather than penalizing missing profile scores. Prefer simpler models for genuinely simple requests and reserve stronger models for implementation, multi-constraint reasoning, architecture, and debugging.`;

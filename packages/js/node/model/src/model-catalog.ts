@@ -52,7 +52,7 @@ export const DEFAULT_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 export const DEFAULT_FUZZY_THRESHOLD = 0.4;
 
 /** Cache key parts under which endpoint listings are stored. */
-const CACHE_KEY_NAMESPACE = "serving-endpoints";
+const CACHE_KEY_NAMESPACE = "serving-endpoints-v2";
 const catalogueCache = modelCatalogueCache;
 
 /** Options for {@link listServingEndpoints}. */

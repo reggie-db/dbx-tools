@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { type ServingEndpointSummary, ModelClass } from "@dbx-tools/shared-model";
 
+import { classifyByFamily } from "../src/classify.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
 import {
   clearServingEndpointsCache,
@@ -51,6 +52,15 @@ const TIERED = [chat(OPUS_8), chat(SONNET), chat(HAIKU_5)];
 function names(models: { endpoint: ServingEndpointSummary }[]): string[] {
   return models.map((m) => m.endpoint.name);
 }
+
+describe("family classification", () => {
+  it("maps GPT named tiers to their intended capability bands", () => {
+    assert.equal(classifyByFamily("databricks-gpt-6-1-sol")?.class, ModelClass.ChatThinking);
+    assert.equal(classifyByFamily("databricks-gpt-6-astra")?.class, ModelClass.ChatThinking);
+    assert.equal(classifyByFamily("databricks-gpt-6-1-terra")?.class, ModelClass.ChatBalanced);
+    assert.equal(classifyByFamily("databricks-gpt-6-luna")?.class, ModelClass.ChatFast);
+  });
+});
 
 describe("searchServingEndpoints / resolveModelId", () => {
   const endpoints = [chat(OPUS_8), chat(SONNET), chat(HAIKU_5)];
@@ -673,7 +683,9 @@ describe("lookupModels", () => {
     const custom = { ...chat(OPUS_8), modelSource: "custom" as const };
 
     assert.deepEqual(names(lookupModels([custom, foundation])), [SONNET]);
-    assert.deepEqual(names(lookupModels([custom, foundation], { modelSource: "custom" })), [OPUS_8]);
+    assert.deepEqual(names(lookupModels([custom, foundation], { modelSource: "custom" })), [
+      OPUS_8,
+    ]);
     assert.deepEqual(names(lookupModels([custom], { search: "opus" })), [OPUS_8]);
   });
 

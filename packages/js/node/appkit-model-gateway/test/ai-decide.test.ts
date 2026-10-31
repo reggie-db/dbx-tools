@@ -10,17 +10,22 @@ describe("AiDecideRouterService", () => {
   it("sends normalized task context and ranked foundation-model metadata", async () => {
     let captured: Readonly<Record<string, unknown>> | undefined;
     const service = new AiDecideRouterService((_client, body) => {
+      if ((body.questions as { task_complexity?: unknown }).task_complexity) {
+        return Promise.resolve({
+          response: {
+            answers: { task_complexity: { type: "choice", choice: "simple" } },
+          },
+        });
+      }
       captured = body;
-      const candidates = (body.state as { candidates: Array<{ id: string }> }).candidates;
-      const selected = candidates.findIndex(({ id }) => id === "system.ai.thinking") + 1;
       return Promise.resolve({
         response: {
           answers: {
             model: {
               type: "choice",
-              choice: `model_${selected}`,
+              choice: "model_1",
               confidence: 0.82,
-              probabilities: { model_1: 0.18, model_2: 0.82 },
+              probabilities: { model_1: 1 },
             },
           },
         },
@@ -37,7 +42,7 @@ describe("AiDecideRouterService", () => {
       {
         messages: [
           { role: "system", content: "Answer accurately." },
-          { role: "user", content: "Plan a migration with several constraints." },
+          { role: "user", content: "Explain idempotency in one short sentence." },
         ],
         authorization: "do-not-send",
         tools: [{ function: { arguments: "do-not-send" } }],
@@ -47,7 +52,7 @@ describe("AiDecideRouterService", () => {
       { strategy: "quality" },
     );
 
-    assert.equal(result.endpoint.name, "system.ai.thinking");
+    assert.equal(result.endpoint.name, "databricks-gpt-5-4-mini");
     assert.equal(result.observation.confidence, 0.82);
     const state = captured?.state as {
       task: string;
@@ -58,17 +63,16 @@ describe("AiDecideRouterService", () => {
       strategy: string;
       candidates: Array<Record<string, unknown>>;
     };
-    assert.match(state.task, /Plan a migration/);
-    assert.equal(state.current_request, "Plan a migration with several constraints.");
+    assert.match(state.task, /Explain idempotency/);
+    assert.equal(state.current_request, "Explain idempotency in one short sentence.");
     assert.equal(state.conversation_turns, 1);
     assert.ok(state.context_tokens > 0);
     assert.match(state.completion_requirement, /Partial or truncated output is insufficient/);
     assert.equal(state.task.includes("do-not-send"), false);
     assert.equal(state.strategy, "quality");
-    assert.equal(state.candidates.length, 2);
-    const benchmarks = state.candidates.find(
-      ({ id }) => id === "databricks-gpt-5-4-mini",
-    )?.benchmarks as Record<string, number | null>;
+    assert.equal(state.candidates.length, 1);
+    const benchmarks = state.candidates.find(({ id }) => id === "databricks-gpt-5-4-mini")
+      ?.benchmarks as Record<string, number | null>;
     assert.equal(benchmarks.quality_percentile, 60.75);
     assert.equal(benchmarks.normalized_response_time_ms, 3_840);
     assert.equal(benchmarks.time_to_first_token_ms, 446.472);
@@ -79,16 +83,14 @@ describe("AiDecideRouterService", () => {
     assert.match(instructions, /Judge current_request/);
     assert.match(instructions, /dependencies, configuration, APIs, and multiple code artifacts/);
     assert.match(instructions, /Lower normalized_response_time_ms/);
-    assert.ok(
-      (captured?.questions as { task_complexity?: unknown }).task_complexity !== undefined,
-    );
+    assert.equal((captured?.questions as { task_complexity?: unknown }).task_complexity, undefined);
     assert.deepEqual(
       state.candidates
         .map(({ id, rank, class: modelClass, profile }) => ({
-        id,
-        rank,
-        modelClass,
-        profile,
+          id,
+          rank,
+          modelClass,
+          profile,
         }))
         .sort((left, right) => String(left.id).localeCompare(String(right.id))),
       [
@@ -98,29 +100,131 @@ describe("AiDecideRouterService", () => {
           modelClass: ModelClass.ChatFast,
           profile: { quality: 9, speed: 9, cost: 3 },
         },
-        {
-          id: "system.ai.thinking",
-          rank: state.candidates.find(({ id }) => id === "system.ai.thinking")?.rank,
-          modelClass: ModelClass.ChatThinking,
-          profile: { quality: 10, speed: 4, cost: 2 },
-        },
       ],
     );
   });
 
-  it("reselects from sufficient candidates when the task tier rejects the cheapest choice", async () => {
+  it("uses the latest request as the primary task while retaining conversation context", async () => {
+    let complexityBody: Readonly<Record<string, unknown>> | undefined;
+    let modelBody: Readonly<Record<string, unknown>> | undefined;
+    const service = new AiDecideRouterService((_client, body) => {
+      if ((body.questions as { task_complexity?: unknown }).task_complexity) {
+        complexityBody = body;
+        return Promise.resolve({
+          response: {
+            answers: { task_complexity: { type: "choice", choice: "simple" } },
+          },
+        });
+      }
+      modelBody = body;
+      return Promise.resolve({
+        response: {
+          answers: { model: { type: "choice", choice: "model_1" } },
+        },
+      });
+    });
+
+    await service.select(
+      {
+        messages: [
+          {
+            role: "user",
+            content: "Design a zero-downtime authentication migration with rollback support.",
+          },
+          { role: "assistant", content: "Use dual writes, backfill, and staged cutover." },
+          { role: "user", content: "Reply with exactly one word: hello" },
+        ],
+      },
+      [
+        endpoint("system.ai.luna", ModelClass.ChatFast, 35, 100, 0.1),
+        endpoint("system.ai.terra", ModelClass.ChatBalanced, 45, 60, 1),
+      ],
+      {} as WorkspaceClient,
+    );
+
+    const complexityState = complexityBody?.state as {
+      task: string;
+      current_request: string;
+      conversation_context?: string;
+    };
+    assert.equal(complexityState.task, "Reply with exactly one word: hello");
+    assert.equal(complexityState.current_request, complexityState.task);
+    assert.equal(complexityState.conversation_context, undefined);
+    const state = modelBody?.state as {
+      task: string;
+      current_request: string;
+      conversation_context: string;
+      conversation_turns: number;
+    };
+    assert.equal(state.task, "Reply with exactly one word: hello");
+    assert.equal(state.current_request, state.task);
+    assert.match(state.conversation_context, /zero-downtime authentication migration/);
+    assert.equal(state.conversation_turns, 2);
+  });
+
+  it("selects a simple task from fast candidates", async () => {
     const calls: Readonly<Record<string, unknown>>[] = [];
     const service = new AiDecideRouterService((_client, body) => {
       calls.push(body);
       if (calls.length === 1) {
-        const candidates = (body.state as { candidates: Array<{ id: string }> }).candidates;
-        const fast = candidates.findIndex(({ id }) => id === "system.ai.fast") + 1;
         return Promise.resolve({
           response: {
-            answers: {
-              task_complexity: { type: "choice", choice: "advanced" },
-              model: { type: "choice", choice: `model_${fast}` },
-            },
+            answers: { task_complexity: { type: "choice", choice: "simple" } },
+          },
+        });
+      }
+      return Promise.resolve({
+        response: {
+          answers: { model: { type: "choice", choice: "model_1", confidence: 0.8 } },
+        },
+      });
+    });
+
+    const result = await service.select(
+      "Reply with exactly one word: hello",
+      [
+        endpoint("system.ai.terra", ModelClass.ChatBalanced, 45, 60, 1),
+        endpoint("system.ai.luna", ModelClass.ChatFast, 35, 100, 0.1),
+        endpoint("system.ai.sol", ModelClass.ChatThinking, 55, 20, 2),
+      ],
+      {} as WorkspaceClient,
+      { strategy: "balanced" },
+    );
+
+    assert.equal(result.endpoint.name, "system.ai.luna");
+    assert.equal(calls.length, 2);
+    const retryState = calls[1]?.state as {
+      task_complexity: string;
+      candidates: Array<{
+        id: string;
+        rank: number;
+        class: string;
+        profile: { quality: number; speed: number; cost: number };
+        benchmarks: Record<string, number | null>;
+        capabilities: { tools: boolean; structured_output: boolean };
+      }>;
+    };
+    assert.equal(retryState.task_complexity, "simple");
+    assert.deepEqual(
+      retryState.candidates.map((candidate) => candidate.class),
+      [ModelClass.ChatFast],
+    );
+    assert.equal(retryState.candidates[0]?.id, "system.ai.luna");
+    assert.equal(retryState.candidates[0]?.rank, 1);
+    assert.deepEqual(retryState.candidates[0]?.profile, { quality: 35, speed: 100, cost: 0.1 });
+    assert.ok(retryState.candidates[0]?.benchmarks);
+    assert.equal(retryState.candidates[0]?.capabilities.tools, true);
+    assert.equal(retryState.candidates[0]?.capabilities.structured_output, true);
+  });
+
+  it("selects an advanced task from thinking candidates", async () => {
+    const calls: Readonly<Record<string, unknown>>[] = [];
+    const service = new AiDecideRouterService((_client, body) => {
+      calls.push(body);
+      if (calls.length === 1) {
+        return Promise.resolve({
+          response: {
+            answers: { task_complexity: { type: "choice", choice: "advanced" } },
           },
         });
       }
@@ -134,14 +238,14 @@ describe("AiDecideRouterService", () => {
     const result = await service.select(
       "Implement an endpoint with dependencies, configuration, and multiple code artifacts.",
       [
-        endpoint("system.ai.fast", ModelClass.ChatFast, 35, 100, 0.1),
-        endpoint("system.ai.thinking", ModelClass.ChatThinking, 55, 20, 1),
+        endpoint("system.ai.terra", ModelClass.ChatBalanced, 45, 60, 1),
+        endpoint("system.ai.sol", ModelClass.ChatThinking, 55, 20, 2),
       ],
       {} as WorkspaceClient,
       { strategy: "cost" },
     );
 
-    assert.equal(result.endpoint.name, "system.ai.thinking");
+    assert.equal(result.endpoint.name, "system.ai.sol");
     assert.equal(calls.length, 2);
     const retryState = calls[1]?.state as {
       task_complexity: string;
@@ -168,8 +272,15 @@ describe("AiDecideRouterService", () => {
       },
     };
     let calls = 0;
-    const invoke = () => {
+    const invoke = (_client: WorkspaceClient, body: Readonly<Record<string, unknown>>) => {
       calls += 1;
+      if ((body.questions as { task_complexity?: unknown }).task_complexity) {
+        return Promise.resolve({
+          response: {
+            answers: { task_complexity: { type: "choice", choice: "simple" } },
+          },
+        });
+      }
       return Promise.resolve({
         response: {
           answers: {
@@ -187,7 +298,7 @@ describe("AiDecideRouterService", () => {
 
     assert.equal(await first.isEnabled(endpoints, { config: {} } as WorkspaceClient), true);
     assert.equal(await second.isEnabled(endpoints, { config: {} } as WorkspaceClient), true);
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
     first.dispose();
     second.dispose();
   });

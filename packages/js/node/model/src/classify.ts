@@ -144,10 +144,10 @@ function versionScore(name: string): number {
 /**
  * Best-effort chat capability band for an endpoint we have no live
  * score for, keyed off provider family and the well-known variant words
- * in the name (`opus`/`sonnet`/`haiku`, `pro`/`mini`/`nano`,
- * `flash`/`flash-lite`, Llama parameter sizes, etc). Returns `null` for
- * names we don't recognize so unknown custom endpoints are never
- * auto-selected as a default. The accompanying `rank` orders siblings
+ * in the name (`opus`/`sonnet`/`haiku`, `sol`/`terra`/`luna`,
+ * `pro`/`mini`/`nano`, `flash`/`flash-lite`, Llama parameter sizes,
+ * etc). Returns `null` for names we don't recognize so unknown custom
+ * endpoints are never auto-selected as a default. The accompanying `rank` orders siblings
  * within a class. Only ever returns a chat band - embedding endpoints
  * are classified by task, not name.
  */
@@ -166,8 +166,12 @@ export function classifyByFamily(name: string): FamilyClass | null {
   }
   // OpenAI GPT family
   if (n.includes("gpt")) {
-    if (n.includes("pro")) return at(ModelClass.ChatThinking);
-    if (n.includes("mini") || n.includes("nano")) return at(ModelClass.ChatFast);
+    if (n.includes("sol") || n.includes("astra") || n.includes("pro")) {
+      return at(ModelClass.ChatThinking);
+    }
+    if (n.includes("luna") || n.includes("mini") || n.includes("nano")) {
+      return at(ModelClass.ChatFast);
+    }
     return at(ModelClass.ChatBalanced);
   }
 
