@@ -14,10 +14,10 @@ describe("browser model-gateway client", () => {
       },
     });
 
-    const response = await client.listModels({ search: "grok 4" });
+    const response = await client.listModels({ search: "grok 4", metadata: true });
 
     assert.deepEqual(response, { object: "list", data: [] });
-    assert.equal(request?.url, "https://app.example.com/api/v1/models?search=grok+4");
+    assert.equal(request?.url, "https://app.example.com/api/v1/models?search=grok+4&metadata=true");
     assert.equal(request?.headers.get("originator"), null);
   });
 

@@ -438,20 +438,11 @@ export const AssistantBubble = ({
           ),
         )}
         {/*
-         * Render each text part as its own block. A multi-step turn
-         * carries one text part per step (see Stream.tsx segmentation),
-         * so this keeps each step's preamble visually separate instead
-         * of concatenating them into a single run of prose.
+         * AI SDK providers may split one Markdown document across adjacent
+         * text parts. Parse their concatenated value once so a boundary in
+         * the middle of a fenced code block cannot truncate the rendered code.
          */}
-        {textParts.map((part, i) =>
-          part.text.trim().length > 0 ? (
-            <MarkdownWithEmbeds
-              key={`text-${i}`}
-              text={part.text}
-              streaming={isStreamingThisBubble}
-            />
-          ) : null,
-        )}
+        {hasText && <MarkdownWithEmbeds text={fullText} streaming={isStreamingThisBubble} />}
         {pendingApprovals.map((p) => (
           <ToolApprovalCard
             key={p.toolCallId}

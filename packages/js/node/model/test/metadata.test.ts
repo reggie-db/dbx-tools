@@ -4,7 +4,9 @@ import { describe, it } from "node:test";
 import {
   databricksGenAiCalculatorAssetUrl,
   parseDatabricksUsdPerDbu,
+  parseArenaModelRatings,
   parseModelCapabilities,
+  parseModelLatencyBenchmark,
   parseModelParams,
   parseModelRateLimits,
   parseModelTokenPrices,
@@ -14,6 +16,8 @@ import {
 import {
   estimateModelTokenPrice,
   modelCapabilitiesFor,
+  modelLatencyScoreFor,
+  modelRatingFor,
   modelMetadataFor,
   modelRateLimitsFor,
   modelReasoningLevelsFor,
@@ -68,6 +72,164 @@ describe("model metadata generation", () => {
       outputTokensPerMinute: 200,
       queriesPerHour: 3600,
     });
+  });
+
+  it("stores normalized latency with sortable benchmark measurements", () => {
+    const snapshot = parseModelLatencyBenchmark(
+      {
+        generated_at: "2026-10-30T12:00:00Z",
+        max_tokens: 100,
+        results: [
+          {
+            model: "gpt-5.6-luna",
+            ok: true,
+            tokens_per_second: 100,
+            ttft_millis: 100,
+            successful_runs: 5,
+          },
+          {
+            model: "claude-haiku-4-5-20251001",
+            ok: true,
+            tokens_per_second: 50,
+            ttft_millis: 500,
+            successful_runs: 5,
+          },
+          {
+            model: "gemini-3.1-pro-preview",
+            ok: true,
+            tokens_per_second: 10,
+            ttft_millis: 1_000,
+            successful_runs: 5,
+          },
+        ],
+      },
+      42,
+    );
+    assert.deepEqual(snapshot.catalogue.models["gpt-5-6-luna"], {
+      score: 1_100,
+      measurements: {
+        timeToFirstTokenMs: 100,
+        outputTokensPerSecond: 100,
+        successfulRunCount: 5,
+        completionTokenCount: 100,
+        measuredAt: "2026-10-30T12:00:00.000Z",
+      },
+    });
+    assert.equal(snapshot.catalogue.models["claude-4-5-haiku"]?.score, 2_500);
+    assert.equal(snapshot.catalogue.models["gemini-3-1-pro"]?.score, 11_000);
+    assert.equal(snapshot.source.license, "MIT");
+  });
+
+  it("stores sortable Arena ratings and keeps the strongest effort variant", () => {
+    const snapshot = parseArenaModelRatings(
+      {
+        dataset: "lmarena-ai/leaderboard-dataset",
+        split: "latest",
+        metadata: [],
+        configurations: {
+          text_style_control: {
+            rows: [
+              {
+                model_name: "GPT-5.6 Sol (High)",
+                rating: 1_480,
+                rating_lower: 1_470,
+                rating_upper: 1_490,
+                variance: 12,
+                vote_count: 8_000,
+                rank: 25,
+                category: "overall",
+                leaderboard_publish_date: "2026-10-28",
+              },
+              {
+                model_name: "GPT-5.6 Sol (xHigh)",
+                rating: 1_485,
+                rating_lower: 1_478,
+                rating_upper: 1_492,
+                variance: 10,
+                vote_count: 9_000,
+                rank: 22,
+                category: "overall",
+                leaderboard_publish_date: "2026-10-28",
+              },
+              {
+                model_name: "Other Model",
+                rating: 1_200,
+                rating_lower: 1_190,
+                rating_upper: 1_210,
+                variance: 15,
+                vote_count: 5_000,
+                rank: 100,
+                category: "overall",
+                leaderboard_publish_date: "2026-10-28",
+              },
+              {
+                model_name: "GPT-5.6 Sol (xHigh)",
+                rating: 1_600,
+                rating_lower: 1_590,
+                rating_upper: 1_610,
+                variance: 5,
+                vote_count: 2_000,
+                rank: 1,
+                category: "coding",
+                leaderboard_publish_date: "2026-10-28",
+              },
+            ],
+          },
+          agent: {
+            rows: [
+              {
+                model_name: "GPT-5.6 Sol (High)",
+                score: 0.21,
+                score_ci_lower: 0.19,
+                score_ci_upper: 0.23,
+                observation_count: 20_000,
+                session_count: 1_500,
+                rank: 4,
+                category: "overall",
+                leaderboard_publish_date: "2026-10-28T03:00:00-04:00",
+              },
+              {
+                model_name: "Other Model",
+                score: 0.01,
+                score_ci_lower: 0,
+                score_ci_upper: 0.02,
+                observation_count: 10_000,
+                session_count: 1_000,
+                rank: 10,
+                category: "overall",
+                leaderboard_publish_date: "2026-10-28",
+              },
+            ],
+          },
+        },
+      },
+      42,
+    );
+    assert.deepEqual(snapshot.catalogue.models["gpt-5-6-sol"], {
+      score: 72.727,
+      rankings: {
+        agent: {
+          score: 0.21,
+          lowerBound: 0.19,
+          upperBound: 0.23,
+          observationCount: 20_000,
+          sessionCount: 1_500,
+          rank: 4,
+          publishedAt: "2026-10-28T07:00:00.000Z",
+        },
+        text_style_control: {
+          score: 1_485,
+          lowerBound: 1_478,
+          upperBound: 1_492,
+          variance: 10,
+          voteCount: 9_000,
+          rank: 22,
+          publishedAt: "2026-10-28T00:00:00.000Z",
+        },
+      },
+    });
+    assert.deepEqual(snapshot.source.configurations, ["agent", "text_style_control"]);
+    assert.equal(snapshot.source.license, "CC-BY-4.0");
   });
 
   it("parses Databricks token prices, tiers, variants, and grouped models", () => {
@@ -308,6 +470,17 @@ describe("model metadata lookup", () => {
     assert.equal(modelCapabilitiesFor("custom-temperature-model").temperature, false);
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));
     assert.deepEqual(modelTokenPricesFor(endpoint), modelTokenPricesFor("gpt-5.4"));
+    assert.equal(
+      modelLatencyScoreFor("databricks-gpt-6-luna"),
+      modelLatencyScoreFor("gpt-5.6-luna"),
+    );
+    assert.ok(modelLatencyScoreFor("databricks-gpt-6-luna"));
+    assert.equal(
+      modelRatingFor({ name: "custom-gpt", modelServiceName: "system.ai.gpt-5-6-sol" })?.rankings
+        .text_style_control?.score,
+      modelRatingFor("gpt-5.6-sol")?.rankings.text_style_control?.score,
+    );
+    assert.ok(modelRatingFor("databricks-gpt-6-sol"));
     assert.equal(modelTokenPricesFor("databricks-gpt-5-4")?.[0]?.tier, "standard");
     assert.ok(
       modelTokenPricesFor("system.ai.claude-sonnet-4-6")?.some(
@@ -327,6 +500,14 @@ describe("model metadata lookup", () => {
     assert.throws(() => estimateModelTokenPrice("gpt-5.4", { inputTokens: 1.5 }), RangeError);
     assert.equal(modelRateLimitsFor("system.ai.bge-large-en")?.queriesPerHour, 2_160_000);
     assert.deepEqual(modelMetadataFor(endpoint).status, { deprecated: false });
+    assert.equal(
+      modelMetadataFor("databricks-gpt-6-luna").latencyScore,
+      modelLatencyScoreFor("databricks-gpt-6-luna"),
+    );
+    assert.deepEqual(
+      modelMetadataFor("databricks-gpt-6-sol").rating,
+      modelRatingFor("databricks-gpt-6-sol"),
+    );
     assert.deepEqual(modelReasoningLevelsFor("databricks-grok-4-6"), [
       "low",
       "medium",

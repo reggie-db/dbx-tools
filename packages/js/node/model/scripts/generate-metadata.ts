@@ -4,21 +4,27 @@ import { fileURLToPath } from "node:url";
 
 import {
   databricksGenAiCalculatorAssetUrl,
+  parseArenaModelRatings,
   parseModelParams,
   parseModelCapabilities,
+  parseModelLatencyBenchmark,
   parseModelRateLimits,
   parseModelTokenPrices,
   parseModelsDev,
   parseReasoningModels,
   parseRetiredModels,
 } from "../src/_metadata-generator.ts";
+import { loadLMArenaCatalog } from "../src/lm-arena.ts";
 import {
   MODELPARAMS_DEV_MODELS_URL,
   MODELS_DEV_API_URL,
+  MODEL_LATENCY_BENCHMARK_URL,
   GENAI_PRICING_CALCULATOR_URL,
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
   FOUNDATION_MODEL_PRICING_URL,
+  ModelLatencyScoreSnapshotSchema,
+  ModelRatingsSnapshotSchema,
   OPENAI_RESPONSES_MODELS_URL,
   PROPRIETARY_MODEL_PRICING_URL,
   QUERY_REASON_MODELS_URL,
@@ -26,7 +32,9 @@ import {
   WEB_SEARCH_MODELS_URL,
   type ModelParamsSnapshot,
   type ModelCapabilitiesSnapshot,
+  type ModelLatencyScoreSnapshot,
   type ModelRateLimitsSnapshot,
+  type ModelRatingsSnapshot,
   type ModelTokenPricesSnapshot,
   type ModelsDevSnapshot,
   type ReasoningModelsSnapshot,
@@ -71,14 +79,25 @@ await Promise.all([
   refreshSnapshot<ModelParamsSnapshot>("modelparams-reasoning.json", async () =>
     parseModelParams(await loadJson(MODELPARAMS_DEV_MODELS_URL), now),
   ),
+  refreshSnapshot<ModelLatencyScoreSnapshot>(
+    "model-latency.json",
+    async () => parseModelLatencyBenchmark(await loadJson(MODEL_LATENCY_BENCHMARK_URL), now),
+    (value) => ModelLatencyScoreSnapshotSchema.parse(value),
+  ),
+  refreshSnapshot<ModelRatingsSnapshot>(
+    "model-ratings.json",
+    async () => parseArenaModelRatings(await loadLMArenaCatalog(), now),
+    (value) => ModelRatingsSnapshotSchema.parse(value),
+  ),
 ]);
 
 async function refreshSnapshot<T extends { readonly generatedAt: number }>(
   filename: string,
   loadSnapshot: () => Promise<T>,
+  parseSnapshot?: (value: unknown) => T,
 ): Promise<void> {
   const primaryPath = resolve(nodeOutput, filename);
-  const existing = await readSnapshot<T>(primaryPath);
+  const existing = await readSnapshot(primaryPath, parseSnapshot);
   if (existing && now - existing.generatedAt < MODEL_METADATA_TTL_MS / 1000) {
     await writeSnapshot(primaryPath, existing);
     console.log(`${filename}: current`);
@@ -117,9 +136,13 @@ async function loadJson(url: string): Promise<unknown> {
   return response.json();
 }
 
-async function readSnapshot<T>(path: string): Promise<T | undefined> {
+async function readSnapshot<T>(
+  path: string,
+  parseSnapshot?: (value: unknown) => T,
+): Promise<T | undefined> {
   try {
-    return JSON.parse(await readFile(path, "utf8")) as T;
+    const value: unknown = JSON.parse(await readFile(path, "utf8"));
+    return parseSnapshot ? parseSnapshot(value) : (value as T);
   } catch {
     return undefined;
   }

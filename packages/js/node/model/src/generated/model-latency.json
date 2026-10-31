@@ -1,0 +1,214 @@
+{
+  "generatedAt": 1793419324,
+  "source": {
+    "name": "vicaroai/tokens-per-second",
+    "url": "https://github.com/vicaroai/tokens-per-second",
+    "license": "MIT",
+    "measuredAt": "2026-08-03T07:12:50.895Z",
+    "maxTokens": 512
+  },
+  "catalogue": {
+    "models": {
+      "claude-4-5-haiku": {
+        "score": 5473,
+        "measurements": {
+          "timeToFirstTokenMs": 723.694,
+          "outputTokensPerSecond": 107.811,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "claude-4-5-haiku-20251001": {
+        "score": 5473,
+        "measurements": {
+          "timeToFirstTokenMs": 723.694,
+          "outputTokensPerSecond": 107.811,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "claude-4-8-opus": {
+        "score": 8283,
+        "measurements": {
+          "timeToFirstTokenMs": 931.479,
+          "outputTokensPerSecond": 69.65,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "claude-5-sonnet": {
+        "score": 8995,
+        "measurements": {
+          "timeToFirstTokenMs": 1865.134,
+          "outputTokensPerSecond": 71.809,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "deepseek-4-pro": {
+        "score": 13056,
+        "measurements": {
+          "timeToFirstTokenMs": 2977.581,
+          "outputTokensPerSecond": 56.484,
+          "successfulRunCount": 10,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gemini-3-1-flash-lite": {
+        "score": 2551,
+        "measurements": {
+          "timeToFirstTokenMs": 410.978,
+          "outputTokensPerSecond": 239.249,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gemini-3-1-pro": {
+        "score": 140977,
+        "measurements": {
+          "timeToFirstTokenMs": 5417.299,
+          "outputTokensPerSecond": 3.777,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gemini-3-1-pro-preview": {
+        "score": 140977,
+        "measurements": {
+          "timeToFirstTokenMs": 5417.299,
+          "outputTokensPerSecond": 3.777,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gemini-3-5-flash": {
+        "score": 3340,
+        "measurements": {
+          "timeToFirstTokenMs": 502.892,
+          "outputTokensPerSecond": 180.436,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "glm-5-2": {
+        "score": 5982,
+        "measurements": {
+          "timeToFirstTokenMs": 401.374,
+          "outputTokensPerSecond": 91.742,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "glm-5p2": {
+        "score": 7988,
+        "measurements": {
+          "timeToFirstTokenMs": 220.952,
+          "outputTokensPerSecond": 65.923,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-4-mini": {
+        "score": 3840,
+        "measurements": {
+          "timeToFirstTokenMs": 446.472,
+          "outputTokensPerSecond": 150.856,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-4-nano": {
+        "score": 4100,
+        "measurements": {
+          "timeToFirstTokenMs": 260.649,
+          "outputTokensPerSecond": 133.369,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-5": {
+        "score": 9408,
+        "measurements": {
+          "timeToFirstTokenMs": 830.923,
+          "outputTokensPerSecond": 59.696,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-6-luna": {
+        "score": 5288,
+        "measurements": {
+          "timeToFirstTokenMs": 592.482,
+          "outputTokensPerSecond": 109.045,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-6-sol": {
+        "score": 9463,
+        "measurements": {
+          "timeToFirstTokenMs": 1087.472,
+          "outputTokensPerSecond": 61.133,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-6-terra": {
+        "score": 5983,
+        "measurements": {
+          "timeToFirstTokenMs": 667.511,
+          "outputTokensPerSecond": 96.324,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "gpt-5-nano": {
+        "score": 4978,
+        "measurements": {
+          "timeToFirstTokenMs": 529.462,
+          "outputTokensPerSecond": 115.096,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "kimi-3": {
+        "score": 9790,
+        "measurements": {
+          "timeToFirstTokenMs": 1666.669,
+          "outputTokensPerSecond": 63.026,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      },
+      "kimi-k2p6": {
+        "score": 11227,
+        "measurements": {
+          "timeToFirstTokenMs": 825.092,
+          "outputTokensPerSecond": 49.223,
+          "successfulRunCount": 5,
+          "completionTokenCount": 512,
+          "measuredAt": "2026-08-03T07:12:50.895Z"
+        }
+      }
+    }
+  }
+}

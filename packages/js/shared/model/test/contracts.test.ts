@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 
 import {
   EndpointCapabilitiesSchema,
+  ModelLatencyScoreSchema,
   ModelMetadataSchema,
+  ModelRatingSchema,
   ModelRateLimitsSchema,
   ModelTokenPriceSchema,
   ModelStatusSchema,
@@ -33,10 +35,132 @@ describe("browser-safe model schemas", () => {
           structuredOutput: true,
           temperature: true,
         },
+        latencyScore: {
+          score: 1_100,
+          measurements: {
+            timeToFirstTokenMs: 100,
+            outputTokensPerSecond: 100,
+            successfulRunCount: 5,
+            completionTokenCount: 100,
+            measuredAt: "2026-10-30",
+          },
+        },
+        rating: {
+          score: 95.4,
+          rankings: {
+            text_style_control: {
+              score: 1_484.9,
+              lowerBound: 1_478.1,
+              upperBound: 1_491.7,
+              variance: 12.4,
+              voteCount: 8_100,
+              rank: 22,
+              publishedAt: "2026-10-28",
+            },
+          },
+        },
         rateLimits: {
           inputTokensPerMinute: 100,
           outputTokensPerMinute: null,
           queriesPerHour: 10,
+        },
+      }),
+    );
+  });
+
+  it("validates normalized model latency scores", () => {
+    const parsed = ModelLatencyScoreSchema.parse({
+      score: 1_100,
+      measurements: {
+        timeToFirstTokenMs: 100,
+        outputTokensPerSecond: 100,
+        successfulRunCount: 5,
+        completionTokenCount: 100,
+        measuredAt: "2026-10-30T03:15:00-04:00",
+      },
+    });
+    assert.equal(parsed.score, 1_100);
+    assert.equal(parsed.measurements.measuredAt, "2026-10-30T07:15:00.000Z");
+    assert.throws(() =>
+      ModelLatencyScoreSchema.parse({
+        score: -1,
+        measurements: {
+          timeToFirstTokenMs: 100,
+          outputTokensPerSecond: 100,
+          successfulRunCount: 5,
+          completionTokenCount: 100,
+          measuredAt: "2026-10-30",
+        },
+      }),
+    );
+  });
+
+  it("validates sortable model ratings", () => {
+    const parsed = ModelRatingSchema.parse({
+      score: 92.4,
+      rankings: {
+        text: {
+          score: 1_480,
+          lowerBound: 1_470,
+          upperBound: 1_490,
+          voteCount: 8_000,
+          rank: 25,
+          publishedAt: "2026-10-28T03:15:00-04:00",
+        },
+        agent: {
+          score: 0.21,
+          lowerBound: 0.19,
+          upperBound: 0.23,
+          observationCount: 20_000,
+          sessionCount: 1_500,
+          rank: 4,
+          publishedAt: Date.UTC(2026, 9, 28) / 1_000,
+        },
+        text_style_control: {
+          score: 1_484.9,
+          lowerBound: 1_478.1,
+          upperBound: 1_491.7,
+          variance: 12.4,
+          voteCount: 8_100,
+          rank: 22,
+          publishedAt: "2026-10-28",
+        },
+      },
+    });
+    assert.equal(parsed.score, 92.4);
+    assert.equal(parsed.rankings.text_style_control?.rank, 22);
+    assert.equal(parsed.rankings.text_style_control?.publishedAt, "2026-10-28T00:00:00.000Z");
+    assert.equal(parsed.rankings.text?.publishedAt, "2026-10-28T07:15:00.000Z");
+    assert.equal(parsed.rankings.agent?.publishedAt, "2026-10-28T00:00:00.000Z");
+    assert.throws(() =>
+      ModelRatingSchema.parse({
+        score: 92.4,
+        rankings: {
+          text_style_control: {
+            score: 1_484.9,
+            lowerBound: 1_478.1,
+            upperBound: 1_491.7,
+            variance: 12.4,
+            voteCount: 8_100,
+            rank: 22,
+            publishedAt: "-7d",
+          },
+        },
+      }),
+    );
+    assert.throws(() =>
+      ModelRatingSchema.parse({
+        score: 101,
+        rankings: {
+          agent: {
+            score: 1,
+            lowerBound: 0,
+            upperBound: 2,
+            observationCount: -1,
+            sessionCount: 1,
+            rank: 1,
+            publishedAt: "2026-10-28",
+          },
         },
       }),
     );

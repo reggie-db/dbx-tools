@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import type express from "express";
 
 import type { ModelGateway } from "../src/gateway.ts";
-import { sendHealth, sendInference } from "../src/routes.ts";
+import { sendHealth, sendInference, sendModels } from "../src/routes.ts";
 
 describe("model gateway Express lifecycle", () => {
   it("returns the compatibility health payload", async () => {
@@ -18,6 +18,25 @@ describe("model gateway Express lifecycle", () => {
     await ended;
 
     assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()), { ready: true });
+  });
+
+  it("forwards the model metadata opt-in without changing the default", async () => {
+    const calls: unknown[][] = [];
+    const gateway = {
+      async models(...args: unknown[]) {
+        calls.push(args);
+        return { object: "list", data: [] };
+      },
+    } as unknown as ModelGateway;
+    const response = new MockResponse();
+
+    await sendModels(
+      gateway,
+      new MockRequest({ metadata: "true" }) as unknown as express.Request,
+      response as unknown as express.Response,
+    );
+
+    assert.deepEqual(calls, [[undefined, undefined, "foundation", true]]);
   });
 
   it("aborts the upstream request when the client disconnects", async () => {
@@ -83,6 +102,12 @@ describe("model gateway Express lifecycle", () => {
 class MockRequest extends EventEmitter {
   readonly body = { model: "databricks-gpt-test", stream: true };
   readonly headers: Record<string, string> = {};
+  readonly method = "GET";
+  readonly path = "/v1/models";
+
+  constructor(readonly query: Readonly<Record<string, unknown>> = {}) {
+    super();
+  }
 
   header(name: string): string | undefined {
     return this.headers[name.toLowerCase()];

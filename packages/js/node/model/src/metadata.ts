@@ -14,7 +14,9 @@
 import { memoize } from "@dbx-tools/shared-core";
 import type {
   ModelCapabilities,
+  ModelLatencyScore,
   ModelMetadata,
+  ModelRating,
   ModelRateLimits,
   ModelTokenPrice,
   ServingEndpointSummary,
@@ -22,20 +24,26 @@ import type {
 
 import {
   databricksGenAiCalculatorAssetUrl,
+  parseArenaModelRatings,
   parseModelParams,
   parseModelCapabilities,
+  parseModelLatencyBenchmark,
   parseModelRateLimits,
   parseModelTokenPrices,
   parseModelsDev,
   parseReasoningModels,
   parseRetiredModels,
 } from "./_metadata-generator.ts";
+import { compareVersionTuples, versionTuple } from "./classify.ts";
 import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
+import latencySnapshotJson from "./generated/model-latency.json" with { type: "json" };
 import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
+import ratingsSnapshotJson from "./generated/model-ratings.json" with { type: "json" };
 import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
 import tokenPricesSnapshotJson from "./generated/model-token-prices.json" with { type: "json" };
 import modelParamsSnapshotJson from "./generated/modelparams-reasoning.json" with { type: "json" };
 import modelsDevSnapshotJson from "./generated/models-dev-capabilities.json" with { type: "json" };
+import { loadLMArenaCatalog } from "./lm-arena.ts";
 import {
   createMetadataCache,
   mergePreferFreshList,
@@ -45,6 +53,7 @@ import {
 import {
   MODELPARAMS_DEV_MODELS_URL,
   MODELS_DEV_API_URL,
+  MODEL_LATENCY_BENCHMARK_URL,
   GENAI_PRICING_CALCULATOR_URL,
   MODEL_RATE_LIMITS_URL,
   FOUNDATION_MODEL_PRICING_URL,
@@ -57,6 +66,8 @@ import {
   type ModelParamsSnapshot,
   type ModelCapabilitiesSnapshot,
   type ModelCapabilityCatalogue,
+  ModelLatencyScoreSnapshotSchema,
+  ModelRatingsSnapshotSchema,
   type ModelRateLimitsSnapshot,
   type ModelTokenPricesSnapshot,
   type ModelsDevCapabilityCatalogue,
@@ -66,6 +77,7 @@ import {
 import {
   inheritsNativeWebSearch,
   isFoundationModelIdentity,
+  modelFamily,
   modelReasoningEfforts,
   modelSearchQuery,
   modelSupportsTools,
@@ -87,6 +99,8 @@ import {
 } from "./retirement.ts";
 
 const capabilitiesSnapshot = capabilitiesSnapshotJson as ModelCapabilitiesSnapshot;
+const latencySnapshot = ModelLatencyScoreSnapshotSchema.parse(latencySnapshotJson);
+const ratingsSnapshot = ModelRatingsSnapshotSchema.parse(ratingsSnapshotJson);
 const modelParamsSnapshot = modelParamsSnapshotJson as ModelParamsSnapshot;
 const modelsDevSnapshot = modelsDevSnapshotJson as ModelsDevSnapshot;
 const rateLimitsSnapshot = rateLimitsSnapshotJson as ModelRateLimitsSnapshot;
@@ -99,6 +113,8 @@ interface MetadataIndex {
   };
   readonly rateLimits: ReadonlyMap<string, ModelRateLimits>;
   readonly tokenPrices: ReadonlyMap<string, readonly ModelTokenPrice[]>;
+  readonly latencyScores: ReadonlyMap<string, ModelLatencyScore>;
+  readonly ratings: ReadonlyMap<string, ModelRating>;
   readonly reasoning: ReasoningModelCatalogue;
   readonly reasoningDocs: ReasoningModelCatalogue;
   readonly modelParamsReasoning: ReasoningModelCatalogue;
@@ -208,6 +224,23 @@ const tokenPricesCache = createMetadataCache<Readonly<Record<string, readonly Mo
   merge: mergePreferFreshRecord,
 });
 
+const latencyScoreCache = createMetadataCache<Readonly<Record<string, ModelLatencyScore>>>({
+  key: "model-latency",
+  fallback: latencySnapshot.catalogue.models,
+  load: async () =>
+    parseModelLatencyBenchmark(await loadJson(MODEL_LATENCY_BENCHMARK_URL), nowSeconds()).catalogue
+      .models,
+  merge: mergePreferFreshRecord,
+});
+
+const ratingsCache = createMetadataCache<Readonly<Record<string, ModelRating>>>({
+  key: "model-ratings",
+  fallback: ratingsSnapshot.catalogue.models,
+  load: async () =>
+    parseArenaModelRatings(await loadLMArenaCatalog(), nowSeconds()).catalogue.models,
+  merge: mergePreferFreshRecord,
+});
+
 const reasoningDocsCache = createMetadataCache<Readonly<Record<string, readonly string[]>>>({
   key: "model-reasoning",
   fallback: reasoningSnapshot.catalogue.models,
@@ -269,6 +302,8 @@ function buildIndexFromCommitted(): MetadataIndex {
     modelParams: modelParamsSnapshot.catalogue,
     rateLimits: rateLimitsSnapshot.catalogue.models,
     tokenPrices: tokenPricesSnapshot.catalogue.models,
+    latencyScores: latencySnapshot.catalogue.models,
+    ratings: ratingsSnapshot.catalogue.models,
     reasoning: reasoningSnapshot.catalogue.models,
     learnedReasoning: {},
   });
@@ -281,6 +316,8 @@ function buildIndex(input: {
   readonly modelParams: ModelParamsCatalogue;
   readonly rateLimits: Readonly<Record<string, ModelRateLimits>>;
   readonly tokenPrices: Readonly<Record<string, readonly ModelTokenPrice[]>>;
+  readonly latencyScores: Readonly<Record<string, ModelLatencyScore>>;
+  readonly ratings: Readonly<Record<string, ModelRating>>;
   readonly reasoning: Readonly<Record<string, readonly string[]>>;
   readonly learnedReasoning: Readonly<Record<string, readonly ReasoningLevel[]>>;
 }): MetadataIndex {
@@ -302,6 +339,8 @@ function buildIndex(input: {
     tokenPrices: new Map(
       Object.entries(input.tokenPrices).map(([key, prices]) => [key, Object.freeze([...prices])]),
     ),
+    latencyScores: new Map(Object.entries(input.latencyScores)),
+    ratings: new Map(Object.entries(input.ratings)),
     reasoning: Object.freeze({
       ...modelParamsReasoning,
       ...reasoningDocs,
@@ -358,6 +397,8 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
       modelParams,
       rateLimits,
       tokenPrices,
+      latency,
+      ratings,
       reasoning,
       learnedReasoning,
     ] = await Promise.all([
@@ -367,6 +408,8 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
       modelParamsCache.get(),
       rateLimitsCache.get(),
       tokenPricesCache.get(),
+      latencyScoreCache.get(),
+      ratingsCache.get(),
       reasoningDocsCache.get(),
       learnedReasoningCache.get(),
     ]);
@@ -377,6 +420,8 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
       modelParams,
       rateLimits,
       tokenPrices,
+      latencyScores: latency,
+      ratings,
       reasoning,
       learnedReasoning,
     });
@@ -396,6 +441,8 @@ export async function hydrateModelMetadata(): Promise<MetadataIndex> {
     modelParams,
     rateLimits,
     tokenPrices,
+    latency,
+    ratings,
     reasoning,
     learnedReasoning,
   ] = await Promise.all([
@@ -405,6 +452,8 @@ export async function hydrateModelMetadata(): Promise<MetadataIndex> {
     peekOrFallback(modelParamsCache, modelParamsSnapshot.catalogue),
     peekOrFallback(rateLimitsCache, rateLimitsSnapshot.catalogue.models),
     peekOrFallback(tokenPricesCache, tokenPricesSnapshot.catalogue.models),
+    peekOrFallback(latencyScoreCache, latencySnapshot.catalogue.models),
+    peekOrFallback(ratingsCache, ratingsSnapshot.catalogue.models),
     peekOrFallback(reasoningDocsCache, reasoningSnapshot.catalogue.models),
     peekOrFallback(learnedReasoningCache, {}),
   ]);
@@ -415,6 +464,8 @@ export async function hydrateModelMetadata(): Promise<MetadataIndex> {
     modelParams,
     rateLimits,
     tokenPrices,
+    latencyScores: latency,
+    ratings,
     reasoning,
     learnedReasoning,
   });
@@ -551,6 +602,38 @@ export function modelTokenPricesFor(
   return undefined;
 }
 
+/** Resolve the committed normalized latency score for one model identity. */
+export function modelLatencyScoreFor(
+  model: string | ServingEndpointSummary,
+): ModelLatencyScore | undefined {
+  const catalogue = metadataIndex().latencyScores;
+  const identities = modelIdentities(model);
+  for (const identity of identities) {
+    const key = modelKey(identity);
+    if (key && catalogue.has(key)) return catalogue.get(key);
+  }
+  for (const identity of identities) {
+    const inherited = inheritedModelValue(identity, catalogue);
+    if (inherited) return inherited;
+  }
+  return undefined;
+}
+
+/** Resolve the committed Arena human-preference rating for one model identity. */
+export function modelRatingFor(model: string | ServingEndpointSummary): ModelRating | undefined {
+  const catalogue = metadataIndex().ratings;
+  const identities = modelIdentities(model);
+  for (const identity of identities) {
+    const key = modelKey(identity);
+    if (key && catalogue.has(key)) return catalogue.get(key);
+  }
+  for (const identity of identities) {
+    const inherited = inheritedModelValue(identity, catalogue);
+    if (inherited) return inherited;
+  }
+  return undefined;
+}
+
 /** Estimate invocation price from documented Databricks token rates. */
 export function estimateModelTokenPrice(
   model: string | ServingEndpointSummary,
@@ -632,13 +715,17 @@ function publishedReasoningLevelsFor(
   return undefined;
 }
 
-/** Resolve retirement, capability, and rate-limit metadata together. */
+/** Resolve retirement, capability, latency, rate-limit, and price metadata together. */
 export function modelMetadataFor(model: string | ServingEndpointSummary): ModelMetadata {
   const rateLimits = modelRateLimitsFor(model);
   const tokenPrices = modelTokenPricesFor(model);
+  const latencyScore = modelLatencyScoreFor(model);
+  const rating = modelRatingFor(model);
   return {
     status: modelStatusFor(model),
     capabilities: modelCapabilitiesFor(model),
+    ...(latencyScore ? { latencyScore } : {}),
+    ...(rating ? { rating } : {}),
     ...(rateLimits ? { rateLimits } : {}),
     ...(tokenPrices ? { tokenPrices: [...tokenPrices] } : {}),
   };
@@ -652,6 +739,8 @@ export function modelMetadataGeneratedAt(): Readonly<{
   modelParams: number;
   rateLimits: number;
   tokenPrices: number;
+  latency: number;
+  ratings: number;
   reasoning: number;
 }> {
   return {
@@ -661,6 +750,8 @@ export function modelMetadataGeneratedAt(): Readonly<{
     modelParams: modelParamsSnapshot.generatedAt,
     rateLimits: rateLimitsSnapshot.generatedAt,
     tokenPrices: tokenPricesSnapshot.generatedAt,
+    latency: latencySnapshot.generatedAt,
+    ratings: ratingsSnapshot.generatedAt,
     reasoning: reasoningSnapshot.generatedAt,
   };
 }
@@ -676,6 +767,34 @@ function modelIdentities(
     model.modelServiceName,
     ...Object.values(model.serviceNames ?? {}),
   ].filter((value): value is string => Boolean(value));
+}
+
+function inheritedModelValue<T>(
+  identity: string,
+  catalogue: ReadonlyMap<string, T>,
+): T | undefined {
+  const key = modelKey(identity);
+  const family = modelFamily(identity);
+  const variant = modelVariant(identity);
+  const targetVersion = versionTuple(identity);
+  if (!key || !family || !variant || targetVersion.every((value) => value === 0)) return undefined;
+  const candidates = [...catalogue.entries()]
+    .filter(([candidate]) => {
+      if (modelFamily(candidate) !== family || modelVariant(candidate) !== variant) return false;
+      const version = versionTuple(candidate);
+      return (
+        !version.every((value) => value === 0) && compareVersionTuples(targetVersion, version) >= 0
+      );
+    })
+    .sort(([left], [right]) => compareVersionTuples(versionTuple(right), versionTuple(left)));
+  return candidates[0]?.[1];
+}
+
+function modelVariant(identity: string): string | undefined {
+  const query = modelSearchQuery(identity);
+  if (!query) return undefined;
+  const [family, ...tokens] = query.split(" ");
+  return `${family}:${tokens.filter((token) => !/^\d+$/.test(token)).join("-")}`;
 }
 
 function pricingLookupKeys(identity: string): string[] {

@@ -5,6 +5,7 @@
  */
 
 import {
+  ModelMetadataSchema,
   ReasoningEffortSchema,
   ModelSourceSchema,
   ModelStatusSchema,
@@ -41,6 +42,9 @@ export const OpenAIModelSchema = z.object({
   task: z.string().optional(),
   status: ModelStatusSchema,
   capabilities: OpenAIModelCapabilitiesSchema,
+  metadata: ModelMetadataSchema.optional().describe(
+    "Optional dbx-tools metadata requested with metadata=true.",
+  ),
 });
 /** One OpenAI-compatible model-list entry. */
 export type OpenAIModel = z.infer<typeof OpenAIModelSchema>;
@@ -94,6 +98,9 @@ export const CodexModelSchema = z.object({
   web_search_tool_type: z.string(),
   supports_search_tool: z.boolean(),
   supports_image_detail_original: z.boolean(),
+  metadata: ModelMetadataSchema.optional().describe(
+    "Optional dbx-tools metadata requested with metadata=true.",
+  ),
 });
 /** One Codex model-catalog entry. */
 export type CodexModel = z.infer<typeof CodexModelSchema>;

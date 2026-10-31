@@ -95,4 +95,32 @@ describe("AssistantResponseSpinner", () => {
 
     assert.equal(latestVisibleAssistantIndexInTurn(messages, {}), 1);
   });
+
+  it("parses adjacent text parts as one Markdown document", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantBubble, {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              text: "```java\npublic class Greeting {\n  public String greet(",
+            },
+            {
+              type: "text",
+              text: 'String name) { return "Hello " + name; }\n}\n```',
+            },
+          ],
+        },
+        isLast: true,
+        status: "ready",
+      }),
+    );
+
+    const codeEnd = html.indexOf("</code></pre>");
+    assert.ok(codeEnd > 0);
+    assert.ok(html.indexOf("String name") < codeEnd);
+    assert.doesNotMatch(html, /<p>String name/);
+  });
 });

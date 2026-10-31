@@ -46,12 +46,22 @@
       "type": "runtime"
     },
     {
+      "name": "@huggingface/hub",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "cheerio",
       "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "fuse.js",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "hyparquet",
       "version": "catalog:",
       "type": "runtime"
     },
