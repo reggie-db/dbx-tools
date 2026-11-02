@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-model-gateway";
-export const PACKAGE_VERSION = "0.9.195";
+export const PACKAGE_VERSION = "0.9.196";
 export * as aIDecide from "./src/ai-decide.ts";
 export * as gateway from "./src/gateway.ts";
 export * as modelContext from "./src/model-context.ts";
