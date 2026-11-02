@@ -163,6 +163,11 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
         `packed engine omitted ${task}`,
       );
     }
+    run(unrelatedCwd, [join(consumer, ".projenrc.ts")], {
+      ...environment,
+      PROJEN_DISABLE_POST: "1",
+    });
+    run(consumer, ["install", "--force"], environment);
     run(unrelatedCwd, [join(consumer, ".projenrc.ts")], environment);
     const firstManifest = readFileSync(join(consumer, "modules/example/package.json"), "utf8");
     assert.match(firstManifest, /"codegenInputs"/);
