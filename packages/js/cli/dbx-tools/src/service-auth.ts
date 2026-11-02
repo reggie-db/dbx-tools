@@ -1,7 +1,5 @@
 /** Databricks authentication preflight used by installed CLI services. */
 
-import { fileURLToPath } from "node:url";
-
 import { resolveProfile, type DatabricksAuthOptions } from "@dbx-tools/auth";
 import { parseArgv } from "@dbx-tools/cli-args";
 import {
@@ -12,10 +10,9 @@ import {
 import { createWorkspaceClient, waitForWorkspaceAuth } from "@dbx-tools/databricks";
 import { DatabricksOptionsSchema } from "@dbx-tools/shared-core";
 import { z } from "zod";
+import { resolveServiceAuthEntrypoint } from "./_service-auth-entrypoint.ts";
 
-const SERVICE_AUTH_ENTRYPOINT = fileURLToPath(
-  new URL("../bin/dbx-service-auth.ts", import.meta.url),
-);
+const SERVICE_AUTH_ENTRYPOINT = resolveServiceAuthEntrypoint(import.meta.url);
 
 /** Serialized options accepted by the installed service authentication preflight. */
 export const DatabricksServiceAuthOptionsSchema = z

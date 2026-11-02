@@ -217,10 +217,15 @@ describe("unified release workflow", () => {
     assert.doesNotMatch(deploy.if ?? "", /verify-publications/);
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
-      url: "${{ steps.deployment.outputs.page_url }}",
+      url: "${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}",
     });
     assert.deepEqual(deploy.permissions, { pages: "write", "id-token": "write" });
-    assert.equal(step(deploy, "Deploy to GitHub Pages").uses, "actions/deploy-pages@v4");
+    const firstDeploy = step(deploy, "Deploy to GitHub Pages");
+    assert.equal(firstDeploy.uses, "actions/deploy-pages@v4");
+    assert.equal(firstDeploy["continue-on-error"], true);
+    const retryDeploy = step(deploy, "Retry GitHub Pages deployment");
+    assert.equal(retryDeploy.uses, "actions/deploy-pages@v4");
+    assert.equal(retryDeploy.if, "${{ steps.deployment.outcome == 'failure' }}");
 
     assert.equal(release.jobs["publish-github-release"], undefined);
   });

@@ -294,11 +294,16 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     if: ${{ always() && !cancelled() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['build-release'].outputs.npm != 'true' || needs['publish-node'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-node-runtime'].result == 'success') && (needs['build-release'].outputs.pypi != 'true' || needs['publish-pypi-graphiti'].result == 'success') }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Retry GitHub Pages deployment
+        id: deployment_retry
+        if: ${{ steps.deployment.outcome == 'failure' }}
         uses: actions/deploy-pages@v4
     timeout-minutes: 15
   publish-pypi-node-runtime:

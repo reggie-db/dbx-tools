@@ -424,7 +424,7 @@ function addDocsJobs(workflow: GithubWorkflow): void {
     needs: ["build-release"],
     environment: {
       name: "github-pages",
-      url: "${{ steps.deployment.outputs.page_url }}",
+      url: "${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}",
     },
     runsOn: ["ubuntu-latest"],
     permissions: { pages: JobPermission.WRITE, idToken: JobPermission.WRITE },
@@ -433,6 +433,13 @@ function addDocsJobs(workflow: GithubWorkflow): void {
       {
         name: "Deploy to GitHub Pages",
         id: "deployment",
+        uses: "actions/deploy-pages@v4",
+        continueOnError: true,
+      },
+      {
+        name: "Retry GitHub Pages deployment",
+        id: "deployment_retry",
+        if: "${{ steps.deployment.outcome == 'failure' }}",
         uses: "actions/deploy-pages@v4",
       },
     ],

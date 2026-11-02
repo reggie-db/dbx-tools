@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 
+import { resolveServiceAuthEntrypoint } from "../src/_service-auth-entrypoint.ts";
 import { databricksServiceAuthCommand, runDatabricksServiceAuth } from "../src/service-auth.ts";
 
 describe("Databricks service authentication", () => {
@@ -9,6 +11,17 @@ describe("Databricks service authentication", () => {
     assert.match(automatic?.entrypoint ?? "", /dbx-service-auth\.ts$/);
     assert.deepEqual(automatic?.arguments, ["--wait-for-auth", "auto", "--profile", "PROFILE"]);
     assert.equal(databricksServiceAuthCommand("false", "PROFILE"), undefined);
+  });
+
+  it("selects the packaged JavaScript bin from compiled modules", () => {
+    assert.equal(
+      resolveServiceAuthEntrypoint(pathToFileURL("/opt/dbx-tools/lib/src/service-auth.js").href),
+      "/opt/dbx-tools/lib/bin/dbx-service-auth.js",
+    );
+    assert.equal(
+      resolveServiceAuthEntrypoint(pathToFileURL("/opt/dbx-tools/src/service-auth.ts").href),
+      "/opt/dbx-tools/bin/dbx-service-auth.ts",
+    );
   });
 
   it("skips auto mode when no configured profile resolves", async () => {
