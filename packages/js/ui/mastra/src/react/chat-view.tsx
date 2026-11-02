@@ -29,6 +29,7 @@ export const ChatView = ({
   followUpSuggestions = "none",
   followUpSuggestionLimit = 3,
   showSelectedModel = false,
+  metrics,
   toolEventsByMessage = {},
   models,
   model,
@@ -133,6 +134,7 @@ export const ChatView = ({
         suggestions={suggestions}
         followUpQuestions={followUpQuestions}
         showSelectedModel={showSelectedModel}
+        metrics={metrics}
         onSelectSuggestion={(text) => sendMessage({ text })}
         toolEventsByMessage={toolEventsByMessage}
         regenerate={regenerate}

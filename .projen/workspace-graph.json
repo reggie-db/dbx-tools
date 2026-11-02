@@ -10,6 +10,8 @@
         "@dbx-tools/lakebase",
         "@dbx-tools/postgres",
         "@dbx-tools/projen",
+        "@dbx-tools/shared-appkit",
+        "@dbx-tools/shared-auth",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-fs"
       ],
@@ -301,7 +303,8 @@
       "name": "@dbx-tools/databricks-zerobus",
       "path": "packages/js/node/databricks-zerobus",
       "dependencies": [
-        "@dbx-tools/databricks"
+        "@dbx-tools/databricks",
+        "@dbx-tools/shared-core"
       ],
       "reverseDependencies": []
     },
@@ -324,6 +327,7 @@
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-email-template",
         "@dbx-tools/shared-generator",
+        "@dbx-tools/shared-mastra",
         "@dbx-tools/shared-search",
         "@dbx-tools/tunnel",
         "@dbx-tools/ui",
@@ -493,12 +497,22 @@
       ]
     },
     {
+      "name": "@dbx-tools/shared-appkit",
+      "path": "packages/js/shared/appkit",
+      "dependencies": [],
+      "reverseDependencies": [
+        "@dbx-tools/appkit",
+        "@dbx-tools/ui"
+      ]
+    },
+    {
       "name": "@dbx-tools/shared-auth",
       "path": "packages/js/shared/auth",
       "dependencies": [
         "@dbx-tools/shared-core"
       ],
       "reverseDependencies": [
+        "@dbx-tools/appkit",
         "@dbx-tools/auth",
         "@dbx-tools/auth-gate",
         "@dbx-tools/cli",
@@ -530,6 +544,7 @@
         "@dbx-tools/cli-service",
         "@dbx-tools/core",
         "@dbx-tools/databricks",
+        "@dbx-tools/databricks-zerobus",
         "@dbx-tools/demo",
         "@dbx-tools/email",
         "@dbx-tools/fs",
@@ -656,10 +671,12 @@
       "path": "packages/js/shared/mastra",
       "dependencies": [
         "@dbx-tools/shared-genie",
-        "@dbx-tools/shared-model"
+        "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway"
       ],
       "reverseDependencies": [
         "@dbx-tools/appkit-mastra",
+        "@dbx-tools/demo",
         "@dbx-tools/ui-mastra"
       ]
     },
@@ -695,7 +712,9 @@
         "@dbx-tools/cli",
         "@dbx-tools/model-protocol",
         "@dbx-tools/shared-genie-code",
-        "@dbx-tools/shared-graphiti"
+        "@dbx-tools/shared-graphiti",
+        "@dbx-tools/shared-mastra",
+        "@dbx-tools/ui-mastra"
       ]
     },
     {
@@ -728,6 +747,7 @@
       "name": "@dbx-tools/ui",
       "path": "packages/js/ui/appkit",
       "dependencies": [
+        "@dbx-tools/shared-appkit",
         "@dbx-tools/shared-auth",
         "@dbx-tools/shared-core",
         "@dbx-tools/shared-email",
@@ -761,6 +781,7 @@
         "@dbx-tools/shared-genie",
         "@dbx-tools/shared-mastra",
         "@dbx-tools/shared-model",
+        "@dbx-tools/shared-model-gateway",
         "@dbx-tools/ui"
       ],
       "reverseDependencies": [

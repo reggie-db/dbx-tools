@@ -12,9 +12,11 @@ describe("CLI service lifecycle", () => {
     const dataDirectory = join(root, "data");
     const globalHomeDirectory = join(root, ".dbx-tools");
     const hostEntrypoint = join(root, "service-host.ts");
+    const authEntrypoint = join(root, "auth.ts");
     const commandEntrypoint = join(root, "gateway.ts");
     const trayExecutable = join(root, "tray_linux_release");
     await writeFile(hostEntrypoint, "");
+    await writeFile(authEntrypoint, "");
     await writeFile(commandEntrypoint, "");
     await writeFile(trayExecutable, "#!/bin/sh\nexit 0\n");
     await chmod(trayExecutable, 0o755);
@@ -35,6 +37,10 @@ describe("CLI service lifecycle", () => {
           name: "example-runtime[dev]",
           python: "3.12",
           dependencies: ["companion-runtime==4.5.6"],
+        },
+        waitForAuth: "auto",
+        authCommand: {
+          entrypoint: authEntrypoint,
         },
         command: {
           entrypoint: commandEntrypoint,
@@ -74,6 +80,8 @@ describe("CLI service lifecycle", () => {
       id: string;
       hostExecutable: string;
       pythonPackage: { name: string; version: string; python: string; dependencies: string[] };
+      waitForAuth: string;
+      authCommand: { executable: string; entrypoint?: string };
       command: { executable: string; entrypoint?: string; environment: Record<string, string> };
     };
     assert.equal(configuration.id, "com.example.gateway");
@@ -84,6 +92,8 @@ describe("CLI service lifecycle", () => {
       dependencies: ["companion-runtime==4.5.6"],
     });
     assert.equal(configuration.command.entrypoint, undefined);
+    assert.equal(configuration.waitForAuth, "auto");
+    assert.equal(configuration.authCommand.entrypoint, undefined);
     const artifactId = configuration.command.executable.split("/").at(-2)!;
     assert.match(artifactId, /^1\.2\.3-[0-9a-f-]{36}$/);
     assert.equal(
@@ -96,6 +106,18 @@ describe("CLI service lifecycle", () => {
         "versions",
         artifactId,
         "example-gateway-command",
+      ),
+    );
+    assert.equal(
+      configuration.authCommand.executable,
+      join(
+        globalHomeDirectory,
+        "bin",
+        "services",
+        "example-gateway",
+        "versions",
+        artifactId,
+        "example-gateway-auth",
       ),
     );
     assert.equal(
@@ -124,7 +146,7 @@ describe("CLI service lifecycle", () => {
         offline: false,
       },
     ]);
-    assert.deepEqual(compiled, [commandEntrypoint, hostEntrypoint]);
+    assert.deepEqual(compiled, [commandEntrypoint, authEntrypoint, hostEntrypoint]);
     const startup = await readFile(
       join(root, "config", "autostart", "com.example.gateway.desktop"),
       "utf8",
@@ -162,6 +184,35 @@ describe("CLI service lifecycle", () => {
     await assert.rejects(
       () => stat(join(root, "config", "autostart", "com.example.gateway.desktop")),
       { code: "ENOENT" },
+    );
+  });
+
+  it("requires an authentication preflight when explicitly enabled", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-"));
+    const service = new CliService(
+      {
+        id: "com.example.gateway",
+        name: "Example Gateway",
+        packageName: "@dbx-tools/cli-service",
+        version: "1.2.3",
+        icon: join(root, "icon.png"),
+      },
+      {
+        platform: "linux",
+        homeDirectory: root,
+        temporaryDirectory: root,
+        environment: { XDG_CONFIG_HOME: join(root, "config") },
+        globalHomeDirectory: join(root, ".dbx-tools"),
+        hostEntrypoint: join(root, "service-host.ts"),
+        trayExecutable: join(root, "tray_linux_release"),
+        async compile() {},
+        async installRuntime() {},
+      },
+    );
+
+    await assert.rejects(
+      () => service.install({ start: false, waitForAuth: "true" }),
+      /does not provide an authentication preflight/,
     );
   });
 });

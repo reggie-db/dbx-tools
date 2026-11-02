@@ -54,6 +54,9 @@ describe("model gateway CLI", () => {
     assert.match(definition.version ?? "", /^\d+\.\d+\.\d+/);
     assert.equal(definition.command?.entrypoint, undefined);
     assert.equal(definition.command?.executable, undefined);
+    assert.equal(definition.waitForAuth, "auto");
+    assert.match(definition.authCommand?.entrypoint ?? "", /dbx-service-auth\.ts$/);
+    assert.deepEqual(definition.authCommand?.arguments, ["--wait-for-auth", "auto"]);
     assert.deepEqual(definition.command?.environment, {
       NODE_ENV: "production",
     });
@@ -84,7 +87,17 @@ describe("model gateway CLI", () => {
         write() {},
       },
     }).parseAsync(
-      ["service", "install", "--no-start", "--listen", ":4401", "--profile", "SERVICE-PROFILE"],
+      [
+        "service",
+        "install",
+        "--no-start",
+        "--wait-for-auth",
+        "true",
+        "--listen",
+        ":4401",
+        "--profile",
+        "SERVICE-PROFILE",
+      ],
       { from: "user" },
     );
 
@@ -108,6 +121,13 @@ describe("model gateway CLI", () => {
       "SERVICE-PROFILE",
       "--body-limit",
       "100mb",
+    ]);
+    assert.equal(definition?.waitForAuth, "true");
+    assert.deepEqual(definition?.authCommand?.arguments, [
+      "--wait-for-auth",
+      "true",
+      "--profile",
+      "SERVICE-PROFILE",
     ]);
     assert.deepEqual(definition?.menu, [
       {

@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { flushSync } from "react-dom";
 import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import { messageFeedbackDestination, mlflowTraceUrl } from "./chat-feedback.ts";
-import { SelectedModelPill, selectedModelRoute } from "./selected-model-pill.tsx";
+import { selectedModelActivity } from "./selected-model-pill.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import { isActiveChatStatus, type ChatViewProps, type ToolEvent } from "./types.ts";
 import { messageText } from "../support/export.ts";
@@ -212,6 +212,7 @@ type ChatTranscriptProps = {
   suggestions: NonNullable<ChatViewProps["suggestions"]>;
   followUpQuestions: string[];
   showSelectedModel: NonNullable<ChatViewProps["showSelectedModel"]>;
+  metrics: ChatViewProps["metrics"];
   onSelectSuggestion: (question: string) => void;
   toolEventsByMessage: NonNullable<ChatViewProps["toolEventsByMessage"]>;
   regenerate: ChatViewProps["regenerate"];
@@ -236,6 +237,7 @@ export const ChatTranscript = ({
   suggestions,
   followUpQuestions,
   showSelectedModel,
+  metrics,
   onSelectSuggestion,
   toolEventsByMessage,
   regenerate,
@@ -359,7 +361,10 @@ export const ChatTranscript = ({
               {messages.map((message, index) => {
                 const isLast = index === activeAssistantIndex;
                 if (message.role === "assistant") {
-                  const selectedRoute = showSelectedModel ? selectedModelRoute(message) : undefined;
+                  const selectedActivity =
+                    showSelectedModel || metrics !== undefined
+                      ? selectedModelActivity(message)
+                      : undefined;
                   const messageFeedback = feedbackByMessage[message.id];
                   const feedbackDestination = messageFeedbackDestination(
                     message,
@@ -378,33 +383,37 @@ export const ChatTranscript = ({
                     .find((candidate) => candidate.role === "user");
                   const feedbackRequest = requestMessage ? messageText(requestMessage) : "";
                   return (
-                    <React.Fragment key={message.id}>
-                      {selectedRoute ? <SelectedModelPill route={selectedRoute} /> : null}
-                      <AssistantBubble
-                        message={message}
-                        isLast={isLast}
-                        status={status}
-                        continuation={messages[index - 1]?.role === "assistant"}
-                        events={toolEventsByMessage[message.id]}
-                        regenerate={regenerate}
-                        onResolveToolApproval={onResolveToolApproval}
-                        externalApprovals={pendingApprovalsByMessage[message.id]}
-                        {...(onExportMessage
-                          ? { onExport: (format) => onExportMessage(message, format) }
-                          : {})}
-                        {...(onFeedback && feedbackDestination
-                          ? {
-                              onFeedback: (submission) => onFeedback(message, submission),
-                              feedbackMode: feedbackDestination.mode,
-                              ...(feedbackRequest ? { feedbackRequest } : {}),
-                              ...(messageFeedback?.value
-                                ? { feedbackValue: messageFeedback.value }
-                                : {}),
-                            }
-                          : {})}
-                        {...(traceUrl ? { mlflowTraceUrl: traceUrl } : {})}
-                      />
-                    </React.Fragment>
+                    <AssistantBubble
+                      key={message.id}
+                      message={message}
+                      isLast={isLast}
+                      status={status}
+                      continuation={messages[index - 1]?.role === "assistant"}
+                      events={toolEventsByMessage[message.id]}
+                      regenerate={regenerate}
+                      onResolveToolApproval={onResolveToolApproval}
+                      externalApprovals={pendingApprovalsByMessage[message.id]}
+                      selectedModelActivity={selectedActivity}
+                      selectedModelActive={
+                        isActiveChatStatus(status) && index === messages.length - 1
+                      }
+                      showSelectedModel={showSelectedModel}
+                      metrics={metrics}
+                      {...(onExportMessage
+                        ? { onExport: (format) => onExportMessage(message, format) }
+                        : {})}
+                      {...(onFeedback && feedbackDestination
+                        ? {
+                            onFeedback: (submission) => onFeedback(message, submission),
+                            feedbackMode: feedbackDestination.mode,
+                            ...(feedbackRequest ? { feedbackRequest } : {}),
+                            ...(messageFeedback?.value
+                              ? { feedbackValue: messageFeedback.value }
+                              : {}),
+                          }
+                        : {})}
+                      {...(traceUrl ? { mlflowTraceUrl: traceUrl } : {})}
+                    />
                   );
                 }
                 return <UserBubble key={message.id} message={message} />;

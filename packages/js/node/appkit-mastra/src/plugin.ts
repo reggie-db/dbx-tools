@@ -131,10 +131,7 @@ import {
   statementDataDefaults,
 } from "./defaults.ts";
 import { resolveFeedbackModes } from "./feedback-mode.ts";
-import {
-  resolveFollowUpSuggestionsConfig,
-  suggestQuestions,
-} from "./follow-up-suggestions.ts";
+import { resolveFollowUpSuggestionsConfig, suggestQuestions } from "./follow-up-suggestions.ts";
 import {
   deleteGenieThread,
   deleteGenieThreadMessage,

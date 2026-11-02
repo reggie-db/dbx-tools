@@ -7,30 +7,17 @@
 import { downloadFile, listFiles, type ListFileEntry } from "@huggingface/hub";
 import { parquetReadObjects } from "hyparquet";
 
-/** Hugging Face dataset identifier for the public LMArena leaderboard. */
-export const LM_ARENA_DATASET = "lmarena-ai/leaderboard-dataset";
+import { LM_ARENA_DATASET, LM_ARENA_SPLIT, type LMArenaCatalogData } from "./lm-arena-contract.ts";
 
-/** LMArena split containing the current published leaderboard snapshots. */
-export const LM_ARENA_SPLIT = "latest";
-
-/** Human-readable Hugging Face page for the LMArena leaderboard dataset. */
-export const LM_ARENA_DATASET_URL =
-  "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset";
+export {
+  LM_ARENA_DATASET,
+  LM_ARENA_DATASET_URL,
+  LM_ARENA_SPLIT,
+  type LMArenaCatalogData,
+  type LMArenaConfigurationData,
+} from "./lm-arena-contract.ts";
 
 const LM_ARENA_REPO = { type: "dataset", name: LM_ARENA_DATASET } as const;
-
-/** Rows loaded for one LMArena dataset configuration. */
-export interface LMArenaConfigurationData {
-  readonly rows: readonly unknown[];
-}
-
-/** Complete latest LMArena catalogue loaded from Hugging Face parquet shards. */
-export interface LMArenaCatalogData {
-  readonly dataset: typeof LM_ARENA_DATASET;
-  readonly split: typeof LM_ARENA_SPLIT;
-  readonly metadata: readonly ListFileEntry[];
-  readonly configurations: Readonly<Record<string, LMArenaConfigurationData>>;
-}
 
 /** Load every latest LMArena configuration directly from Hugging Face parquet files. */
 export async function loadLMArenaCatalog(): Promise<LMArenaCatalogData> {

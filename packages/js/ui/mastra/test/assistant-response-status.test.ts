@@ -57,6 +57,56 @@ describe("AssistantResponseSpinner", () => {
     assert.doesNotMatch(html, /Thinking\.\.\.|animate-pulse/);
   });
 
+  it("places the selected model left of actions and turn metrics on the right", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantBubble, {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          metadata: {
+            createdAt: "2026-10-31T12:00:00.000Z",
+            completedAt: "2026-10-31T12:00:01.000Z",
+          },
+          parts: [{ type: "text", text: "Hello" }],
+        },
+        isLast: true,
+        status: "ready",
+        selectedModelActivity: {
+          route: {
+            model: "databricks-gpt-6-luna",
+            selection: "ai-decide",
+            pricing: {
+              tier: "standard",
+              condition: "short-context",
+              inputDbuPerMillionTokens: 1,
+              outputDbuPerMillionTokens: 1,
+              cacheReadDbuPerMillionTokens: 1,
+              cacheWriteDbuPerMillionTokens: null,
+              cacheWriteOneHourDbuPerMillionTokens: null,
+              usdPerDbu: { aws: 0.07 },
+            },
+          },
+          usage: {
+            model: "databricks-gpt-6-luna",
+            selection: "ai-decide",
+            usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 },
+            estimatedCostDbu: 0.001,
+          },
+        },
+        showSelectedModel: true,
+        metrics: ["time", "usd"],
+      }),
+    );
+
+    const modelIndex = html.indexOf("GPT 6 Luna");
+    const copyIndex = html.indexOf('aria-label="Copy"');
+    const timeIndex = html.indexOf("1.0s");
+    const usdIndex = html.indexOf("$0.000070");
+    assert.ok(modelIndex >= 0 && modelIndex < copyIndex);
+    assert.ok(copyIndex < timeIndex && timeIndex < usdIndex);
+    assert.doesNotMatch(html, />databricks-gpt-6-luna</);
+  });
+
   it("keeps a tool-only spinner left in the same footer row", () => {
     const html = renderToStaticMarkup(
       createElement(AssistantBubble, {

@@ -17,6 +17,7 @@ import {
   type CliServiceCliDependencies,
   defineService,
   type CliServiceDefinition,
+  type CliServiceInstallOptions,
 } from "@dbx-tools/cli-service";
 import { serviceTrayIcon } from "@dbx-tools/cli-service";
 import {
@@ -27,6 +28,7 @@ import {
 import { Command } from "commander";
 
 import { PACKAGE_VERSION } from "../../index.ts";
+import { databricksServiceAuthCommand } from "../service-auth.ts";
 
 const DEFAULT_SERVICE_DIRECTORY = join(homedir(), ".dbx-tools", "services", "graphiti");
 const DEFAULT_SERVICE_HOME = join(homedir(), ".dbx-tools", "graphiti");
@@ -46,16 +48,20 @@ export type GraphitiServiceOptions = GraphitiOptions;
 /** Define a Graphiti service without duplicating installation or lifecycle policy. */
 export function graphitiServiceDefinition(
   options: GraphitiServiceOptions = {},
+  serviceOptions: Pick<CliServiceInstallOptions, "waitForAuth"> = {},
 ): CliServiceDefinition {
   const resolved = GraphitiOptionsSchema.parse({
     ...options,
     graphitiHome: options.graphitiHome ?? DEFAULT_SERVICE_HOME,
   });
+  const waitForAuth = serviceOptions.waitForAuth ?? "auto";
   return defineService(import.meta.url, {
     id: "dbx-tools.cli-graphiti",
     name: "dbx graphiti",
     icon: serviceTrayIcon("graphiti"),
     dataDirectory: DEFAULT_SERVICE_DIRECTORY,
+    waitForAuth,
+    authCommand: databricksServiceAuthCommand(waitForAuth, resolved.profile),
     pythonPackage: {
       name: resolved.databaseUrl ? "dbx-tools-graphiti" : "dbx-tools-graphiti[dev]",
     },
@@ -83,7 +89,7 @@ export function buildProgram(
 
   program.addCommand(
     buildServiceCommand(
-      () => graphitiServiceDefinition(parseGraphitiOptions(program)),
+      (serviceOptions) => graphitiServiceDefinition(parseGraphitiOptions(program), serviceOptions),
       dependencies.service,
     ),
   );

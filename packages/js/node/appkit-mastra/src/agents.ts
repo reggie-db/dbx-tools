@@ -69,8 +69,8 @@ import {
 } from "./follow-up-suggestions.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import { withRequestMemoryScope, type MemoryBuilder } from "./memory.ts";
-import { buildModel } from "./model.ts";
 import { emitModelUsagePart } from "./model-usage.ts";
+import { buildModel } from "./model.ts";
 import {
   buildResponsesProviderOptionsProcessor,
   providerHistoryCompatProcessor,

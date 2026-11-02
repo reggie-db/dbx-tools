@@ -41,6 +41,7 @@ import {
   type ServiceLaunch,
 } from "./_startup.ts";
 import {
+  CliServiceWaitForAuthSchema,
   CliServiceDefinitionSchema,
   type CliServiceCommand,
   type CliServiceDefinition,
@@ -124,6 +125,7 @@ export const CliServiceInstallOptionsSchema = z
       .default(false)
       .describe("Install Python packages from the uv cache without network access.")
       .meta({ env: [], short: false }),
+    waitForAuth: CliServiceWaitForAuthSchema.default("auto").meta({ env: [], short: false }),
   })
   .strict()
   .describe("Options for installing a current-user CLI service.");
@@ -373,6 +375,7 @@ export class CliService implements CliServiceLifecycle {
     const definition = CliServiceDefinitionSchema.parse({
       ...this.definition,
       version: this.definition.version ?? owner.version,
+      waitForAuth: options.waitForAuth ?? this.definition.waitForAuth ?? "auto",
     });
     if (!definition.version) throw new Error(`${definition.name} has no installable version`);
     const pythonPackage = definition.pythonPackage
@@ -405,6 +408,20 @@ export class CliService implements CliServiceLifecycle {
           artifactBinDirectory,
         )
       : undefined;
+    if (definition.waitForAuth === "true" && !definition.authCommand) {
+      throw new Error(`${definition.name} does not provide an authentication preflight`);
+    }
+    const authCommand =
+      definition.waitForAuth !== "false" && definition.authCommand
+        ? await this.installCommand(
+            definition,
+            owner,
+            definition.authCommand,
+            "auth",
+            pythonEnvironment,
+            artifactBinDirectory,
+          )
+        : undefined;
     const menu: CliServiceMenuItem[] = [];
     for (const [index, item] of (definition.menu ?? []).entries()) {
       menu.push(
@@ -426,6 +443,7 @@ export class CliService implements CliServiceLifecycle {
     return CliServiceDefinitionSchema.parse({
       ...definition,
       ...(pythonPackage ? { pythonPackage } : {}),
+      authCommand,
       ...(command ? { command } : {}),
       ...(menu.length > 0 ? { menu } : {}),
     });

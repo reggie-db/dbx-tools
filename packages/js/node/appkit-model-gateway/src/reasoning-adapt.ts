@@ -14,7 +14,7 @@ import {
   adaptRequestReasoning,
   parseReasoningLevels,
 } from "@dbx-tools/model";
-import { log } from "@dbx-tools/shared-core";
+import { isRecord, log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("appkit/model-gateway/reasoning");
 const INVALID_ENCRYPTED_REASONING_PATTERN =
@@ -122,8 +122,4 @@ function stripRequestReasoning(
   delete stripped.reasoning;
   delete stripped.reasoning_effort;
   return stripped;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

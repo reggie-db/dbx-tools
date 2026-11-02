@@ -21,6 +21,7 @@
   "devDependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/projen": "workspace:*",
+    "@dbx-tools/shared-auth": "workspace:*",
     "@types/json-schema": "catalog:",
     "@types/node": "catalog:",
     "typescript": "^5.9.3",

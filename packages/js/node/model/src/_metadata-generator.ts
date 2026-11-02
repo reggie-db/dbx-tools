@@ -13,7 +13,11 @@ import {
 import { load, type CheerioAPI } from "cheerio";
 import { z } from "zod";
 
-import { LM_ARENA_DATASET_URL, LM_ARENA_SPLIT, type LMArenaCatalogData } from "./lm-arena.ts";
+import {
+  LM_ARENA_DATASET_URL,
+  LM_ARENA_SPLIT,
+  type LMArenaCatalogData,
+} from "./lm-arena-contract.ts";
 import type {
   ModelLatencyScoreSnapshot,
   ModelParamsSnapshot,

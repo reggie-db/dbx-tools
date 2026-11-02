@@ -123,9 +123,7 @@ describe("BunLockfile", () => {
       { exec: "bun install" },
       { spawn: BUN_LOCKFILE_TASK },
     ]);
-    assert.deepEqual(tasks.tasks["install:ci"]?.steps, [
-      { exec: "bun install --frozen-lockfile" },
-    ]);
+    assert.deepEqual(tasks.tasks["install:ci"]?.steps, [{ exec: "bun install --frozen-lockfile" }]);
 
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8").split("\n");
     assert.ok(gitignore.includes("!/bun.lock"));

@@ -23,10 +23,7 @@ import type {
   AiDecideStrategy,
   SmartRouterObservation,
 } from "@dbx-tools/shared-model-gateway";
-import {
-  AI_DECIDE_STRATEGY_HEADER,
-  AiDecideStrategySchema,
-} from "@dbx-tools/shared-model-gateway";
+import { AI_DECIDE_STRATEGY_HEADER, AiDecideStrategySchema } from "@dbx-tools/shared-model-gateway";
 
 import type { MastraPluginConfig } from "./config.ts";
 

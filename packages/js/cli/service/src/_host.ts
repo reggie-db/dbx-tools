@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 
 import { parseArgv } from "@dbx-tools/cli-args";
 import { shutdownProcessTree } from "@dbx-tools/core";
+import { boundedRetryDelay } from "@dbx-tools/shared-core";
 import * as systrayModule from "systray2";
 import type SysTrayType from "systray2";
 import type { MenuItem } from "systray2";
@@ -21,6 +22,12 @@ import type { CliServiceCommand, CliServiceDefinition, CliServiceMenuItem } from
 
 const CHILD_TERMINATE_TIMEOUT_MILLISECONDS = 30_000;
 const CHILD_KILL_TIMEOUT_MILLISECONDS = 5_000;
+// Startup entries do not supervise the host, so the host restarts a managed
+// command that exits early (for example, before VPN or network is up at login).
+const DEFAULT_RESTART_BACKOFF: ServiceRestartBackoff = {
+  delaysMilliseconds: [1_000, 2_000, 5_000, 10_000, 30_000, 60_000],
+  stableMilliseconds: 60_000,
+};
 const CliServiceHostOptionsSchema = z.object({
   serviceConfig: z
     .string()
@@ -40,9 +47,17 @@ type ServiceTray = Pick<SysTrayType, "ready" | "onClick" | "onError" | "onExit">
   readonly process?: ChildProcess | null;
 };
 
+interface ServiceRestartBackoff {
+  /** Delays between consecutive early exits; the last entry repeats. */
+  readonly delaysMilliseconds: readonly number[];
+  /** Uptime after which an exit is treated as a fresh failure rather than consecutive. */
+  readonly stableMilliseconds: number;
+}
+
 interface CliServiceHostDependencies {
   readonly createTray?: () => ServiceTray;
   readonly listenForControl?: typeof listenForServiceControl;
+  readonly restartBackoff?: ServiceRestartBackoff;
 }
 
 function systrayConstructor(): typeof SysTrayType {
@@ -60,8 +75,14 @@ export class CliServiceHost {
   private readonly requestStop: () => void;
   private readonly createServiceTray: () => ServiceTray;
   private readonly listenForControl: typeof listenForServiceControl;
+  private readonly restartBackoff: ServiceRestartBackoff;
   private tray?: ServiceTray;
+  private auth?: ChildProcess;
+  private authRestartTimer?: ReturnType<typeof setTimeout>;
+  private authRestartAttempt = 0;
   private service?: ChildProcess;
+  private restartTimer?: ReturnType<typeof setTimeout>;
+  private restartAttempt = 0;
   private control?: Awaited<ReturnType<typeof listenForServiceControl>>;
   private stopping = false;
 
@@ -76,6 +97,7 @@ export class CliServiceHost {
     this.requestStop = requestStop;
     this.createServiceTray = dependencies.createTray ?? (() => this.createTray());
     this.listenForControl = dependencies.listenForControl ?? listenForServiceControl;
+    this.restartBackoff = dependencies.restartBackoff ?? DEFAULT_RESTART_BACKOFF;
   }
 
   async start(): Promise<void> {
@@ -86,11 +108,9 @@ export class CliServiceHost {
         () => this.status(),
         this.requestStop,
       );
-      this.service = this.definition.command
-        ? this.startProcess(this.definition.command, true)
-        : undefined;
       this.tray = this.createServiceTray();
       void this.initializeTray(this.tray);
+      this.startManagedCommand();
     } catch (error) {
       await this.stop();
       throw error;
@@ -100,6 +120,10 @@ export class CliServiceHost {
   async stop(): Promise<void> {
     if (this.stopping) return;
     this.stopping = true;
+    clearTimeout(this.authRestartTimer);
+    this.authRestartTimer = undefined;
+    clearTimeout(this.restartTimer);
+    this.restartTimer = undefined;
     if (this.control) {
       await closeServiceControl(this.control, this.paths.controlAddress);
       this.control = undefined;
@@ -108,10 +132,67 @@ export class CliServiceHost {
       await stopTray(this.tray);
       this.tray = undefined;
     }
+    if (this.auth) {
+      await stopProcess(this.auth);
+      this.auth = undefined;
+    }
     if (this.service) {
       await stopProcess(this.service);
       this.service = undefined;
     }
+  }
+
+  private startManagedCommand(): void {
+    const authCommand =
+      this.definition.waitForAuth !== "false" ? this.definition.authCommand : undefined;
+    if (authCommand) {
+      this.startAuthPreflight(authCommand);
+      return;
+    }
+    if (this.definition.command) this.startService(this.definition.command);
+  }
+
+  private startAuthPreflight(command: CliServiceCommand): void {
+    const child = this.startProcess(command);
+    this.auth = child;
+    child.once("error", () => {
+      if (this.auth !== child) return;
+      this.auth = undefined;
+      this.requestStop();
+    });
+    child.once("exit", (code, signal) => {
+      if (this.stopping || this.auth !== child) return;
+      this.auth = undefined;
+      if (code === 0) {
+        this.authRestartAttempt = 0;
+        void logMessage(this.paths.hostLog, "authentication preflight succeeded");
+        if (this.definition.command) this.startService(this.definition.command);
+        return;
+      }
+      this.scheduleAuthRestart(command, signal ?? String(code));
+    });
+  }
+
+  private scheduleAuthRestart(command: CliServiceCommand, reason: string): void {
+    const delay = boundedRetryDelay(
+      this.authRestartAttempt,
+      this.restartBackoff.delaysMilliseconds,
+    );
+    this.authRestartAttempt += 1;
+    void logMessage(
+      this.paths.hostLog,
+      `authentication preflight exited (${reason}); retrying in ${delay / 1000}s`,
+    );
+    this.authRestartTimer = setTimeout(() => {
+      this.authRestartTimer = undefined;
+      if (this.stopping) return;
+      try {
+        this.startAuthPreflight(command);
+      } catch (error) {
+        void logError(this.paths.hostLog, error);
+        this.requestStop();
+      }
+    }, delay);
   }
 
   private status(): ServiceControlResponse {
@@ -146,7 +227,49 @@ export class CliServiceHost {
     }
   }
 
-  private startProcess(command: CliServiceCommand, managed: boolean): ChildProcess {
+  private startService(command: CliServiceCommand): void {
+    const startedAt = Date.now();
+    const child = this.startProcess(command);
+    this.service = child;
+    // A spawn failure (missing or non-executable binary) will not fix itself.
+    child.once("error", () => {
+      if (this.service !== child) return;
+      this.service = undefined;
+      this.requestStop();
+    });
+    child.once("exit", (code, signal) => {
+      if (this.stopping || this.service !== child) return;
+      this.service = undefined;
+      this.scheduleServiceRestart(command, Date.now() - startedAt, signal ?? String(code));
+    });
+  }
+
+  private scheduleServiceRestart(
+    command: CliServiceCommand,
+    uptimeMilliseconds: number,
+    reason: string,
+  ): void {
+    const { delaysMilliseconds, stableMilliseconds } = this.restartBackoff;
+    if (uptimeMilliseconds >= stableMilliseconds) this.restartAttempt = 0;
+    const delay = boundedRetryDelay(this.restartAttempt, delaysMilliseconds);
+    this.restartAttempt += 1;
+    void logMessage(
+      this.paths.hostLog,
+      `managed service exited (${reason}); restarting in ${delay / 1000}s`,
+    );
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = undefined;
+      if (this.stopping) return;
+      try {
+        this.startService(command);
+      } catch (error) {
+        void logError(this.paths.hostLog, error);
+        this.requestStop();
+      }
+    }, delay);
+  }
+
+  private startProcess(command: CliServiceCommand): ChildProcess {
     if (!command.executable) {
       throw new Error("installed service commands require an executable");
     }
@@ -159,13 +282,6 @@ export class CliServiceHost {
     closeSync(logDescriptor);
     child.once("error", (error) => {
       void logError(this.paths.hostLog, error);
-      if (managed) this.requestStop();
-    });
-    child.once("exit", (code, signal) => {
-      if (!this.stopping && managed) {
-        void logMessage(this.paths.hostLog, `managed service exited (${signal ?? String(code)})`);
-        this.requestStop();
-      }
     });
     return child;
   }
@@ -217,7 +333,7 @@ export class CliServiceHost {
       title: item.label,
       tooltip: "",
       click: () => {
-        const child = this.startProcess(item.command, false);
+        const child = this.startProcess(item.command);
         child.unref();
       },
     };
@@ -233,7 +349,7 @@ export class CliServiceHost {
               arguments: ["url.dll,FileProtocolHandler", url],
             }
           : { executable: "xdg-open", arguments: [url] };
-    const child = this.startProcess(command, false);
+    const child = this.startProcess(command);
     child.unref();
   }
 }

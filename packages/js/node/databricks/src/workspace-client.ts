@@ -9,10 +9,29 @@
 import type { WorkspaceClient as AppKitWorkspaceClient } from "@databricks/appkit";
 import { databricks as appkitDatabricks, tryGetExecutionContext } from "@dbx-tools/appkit";
 import type { DatabricksAuthOptions } from "@dbx-tools/auth";
-import { memoize, type UrlBuilder, urlBuilder, trimToUndefined } from "@dbx-tools/shared-core";
+import {
+  boundedRetryDelay,
+  log,
+  memoize,
+  sleep,
+  toError,
+  type UrlBuilder,
+  urlBuilder,
+  trimToUndefined,
+} from "@dbx-tools/shared-core";
+
+const logger = log.logger("databricks/workspace-client");
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
+
+/** Options for {@link waitForWorkspaceAuth}. */
+export interface WaitForWorkspaceAuthOptions {
+  /** Stops waiting and rejects with the signal's reason. */
+  readonly signal?: AbortSignal;
+  /** Delay schedule between attempts; the last entry repeats. */
+  readonly delaysMs?: readonly number[];
+}
 
 /** Legacy SDK client exposed by AppKit for APIs not yet on its facade. */
 export type WorkspaceClient = ReturnType<AppKitWorkspaceClient["toLegacyWorkspaceClient"]>;
@@ -108,6 +127,35 @@ export async function getCurrentUserName(client?: WorkspaceClient): Promise<stri
     throw new Error("Databricks currentUser.me() did not return a userName");
   }
   return userName;
+}
+
+/**
+ * Call `currentUser.me()` until it succeeds, waiting between failures.
+ *
+ * Use before startup work that requires a reachable, authenticated workspace,
+ * such as a login service that can start before the network or VPN is up.
+ * Every failure is retried, so the caller decides when to give up through
+ * {@link WaitForWorkspaceAuthOptions.signal}.
+ */
+export async function waitForWorkspaceAuth(
+  client: AppKitWorkspaceClient | WorkspaceClient,
+  options: WaitForWorkspaceAuthOptions = {},
+): Promise<Awaited<ReturnType<WorkspaceClient["currentUser"]["me"]>>> {
+  const legacy = toLegacyWorkspaceClient(client);
+  for (let attempt = 0; ; attempt += 1) {
+    options.signal?.throwIfAborted();
+    try {
+      return await legacy.currentUser.me();
+    } catch (error) {
+      const delayMs = boundedRetryDelay(attempt, options.delaysMs);
+      logger.warn("workspace auth not ready", {
+        attempt: attempt + 1,
+        delayMs,
+        error: toError(error),
+      });
+      await sleep(delayMs, options.signal);
+    }
+  }
 }
 
 /** Best-effort `userName` off an AppKit execution context (shape varies by mode). */

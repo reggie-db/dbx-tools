@@ -25,15 +25,8 @@ import {
   type GenieVisualizationEmbed,
   genieVisualizationImagePath,
 } from "@dbx-tools/shared-mastra";
-import type {
-  ModelSource,
-  ReasoningEffort,
-  ServingEndpointSummary,
-} from "@dbx-tools/shared-model";
-import {
-  AI_DECIDE_STRATEGY_HEADER,
-  type AiDecideStrategy,
-} from "@dbx-tools/shared-model-gateway";
+import type { ModelSource, ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { AI_DECIDE_STRATEGY_HEADER, type AiDecideStrategy } from "@dbx-tools/shared-model-gateway";
 import {
   MastraClient,
   type ListAgentSuspendedRunsResponse,

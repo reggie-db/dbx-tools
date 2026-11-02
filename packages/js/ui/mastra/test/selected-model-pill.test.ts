@@ -5,7 +5,12 @@ import type { UIMessage } from "ai";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SelectedModelPill, selectedModelRoute } from "../src/react/selected-model-pill.tsx";
+import {
+  SelectedModelPill,
+  normalizeChatMetrics,
+  selectedModelActivity,
+  selectedModelRoute,
+} from "../src/react/selected-model-pill.tsx";
 
 describe("selected model pill", () => {
   it("reads the route as soon as the route part arrives", () => {
@@ -43,20 +48,31 @@ describe("selected model pill", () => {
     };
 
     assert.equal(selectedModelRoute(message)?.model, "databricks-gpt-5-4");
+    assert.equal(selectedModelActivity(message)?.usage?.usage.totalTokens, 10);
   });
 
-  it("shows the friendly name and endpoint without a disclosure", () => {
+  it("shows only the friendly name in the row and exposes the endpoint as hover text", () => {
     const html = renderToStaticMarkup(
       createElement(SelectedModelPill, {
-        route: {
-          model: "databricks-claude-sonnet-4-6",
-          selection: "ai-decide",
+        activity: {
+          route: {
+            model: "databricks-claude-sonnet-4-6",
+            selection: "ai-decide",
+          },
         },
+        message: {},
       }),
     );
 
     assert.match(html, /Claude Sonnet 4\.6/);
-    assert.match(html, /databricks-claude-sonnet-4-6/);
+    assert.match(html, /aria-label="Claude Sonnet 4\.6: databricks-claude-sonnet-4-6"/);
+    assert.doesNotMatch(html, />databricks-claude-sonnet-4-6</);
     assert.doesNotMatch(html, /aria-expanded/);
+  });
+
+  it("accepts one or many metrics and removes duplicates", () => {
+    assert.deepEqual(normalizeChatMetrics("time"), ["time"]);
+    assert.deepEqual(normalizeChatMetrics(["usd", "tokens", "usd"]), ["usd", "tokens"]);
+    assert.deepEqual(normalizeChatMetrics(undefined), []);
   });
 });

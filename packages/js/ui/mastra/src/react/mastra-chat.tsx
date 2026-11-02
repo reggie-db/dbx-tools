@@ -214,10 +214,15 @@ export interface UseMastraChatOptions<
    */
   showModelPicker?: boolean;
   /**
-   * Show a per-turn activity row for the concrete selected model.
+   * Show the concrete selected model in each assistant footer.
    * Off by default; useful for routing diagnostics and model comparisons.
    */
   showSelectedModel?: boolean;
+  /**
+   * Per-turn metrics rendered at the right edge of the assistant footer.
+   * Omit to keep metrics hidden.
+   */
+  metrics?: ChatViewProps["metrics"];
   /**
    * Fixed per-instance model override. Unlike the model picker selection, this
    * is not persisted by agent id, so parallel views of the same agent can each
@@ -301,6 +306,11 @@ export interface UseMastraChatOptions<
    * not need a second way to erase the active conversation.
    */
   enableClear?: boolean;
+  /**
+   * Show retry actions for the latest assistant response and failed turns.
+   * Defaults to true.
+   */
+  enableRetry?: boolean;
   /**
    * Surface per-message feedback controls for the destination selected by the
    * server. Genie Agent Mode posts Rating and Comment to Genie; traced agent
@@ -1737,12 +1747,13 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     onSendSteerNow: sendSteerNow,
     onRemoveSteer: removeSteer,
     onReorderSteers: reorderSteers,
-    regenerate,
+    regenerate: options.enableRetry === false ? undefined : regenerate,
     onStop: stop,
     suggestions,
     followUpSuggestions: mastraClient.followUpSuggestions,
     followUpSuggestionLimit: mastraClient.followUpSuggestionLimit,
     showSelectedModel: options.showSelectedModel ?? false,
+    metrics: options.metrics,
     pendingApprovalsByMessage: activeSession.pendingApprovalsByMessage,
     onResolveToolApproval: handleApproval,
     // Picker is opt-in: only hand ChatView the catalogue + change

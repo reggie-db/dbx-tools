@@ -209,10 +209,18 @@ describe("Mastra serving API selection", () => {
         "https://example.cloud.databricks.com/api/2.0/ai-functions/ai-decide",
       );
       const body = (await request.json()) as {
-        state: { strategy: string; candidates: Array<{ id: string }> };
+        state: { strategy?: string; candidates?: Array<{ id: string }> };
+        questions: { task_complexity?: unknown };
       };
+      if (body.questions.task_complexity) {
+        return Response.json({
+          response: {
+            answers: { task_complexity: { type: "choice", choice: "simple" } },
+          },
+        });
+      }
       assert.equal(body.state.strategy, "cost");
-      selectedModel = body.state.candidates[0]!.id;
+      selectedModel = body.state.candidates![0]!.id;
       return Response.json({
         response: {
           answers: { model: { type: "choice", choice: "model_1", confidence: 0.9 } },

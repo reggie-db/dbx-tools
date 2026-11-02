@@ -485,8 +485,7 @@ export async function applyLakebaseEnv(
   applyLakebaseToEnv(resolved);
   const configuredUser = process.env.PGUSER || process.env.DATABRICKS_CLIENT_ID;
   const user =
-    configuredUser ??
-    (await getUsernameWithApiLookup({ workspaceClient: await getClient() }));
+    configuredUser ?? (await getUsernameWithApiLookup({ workspaceClient: await getClient() }));
   if (user) process.env.PGUSER ??= user;
   return { resolved, ...(user ? { user } : {}) };
 }

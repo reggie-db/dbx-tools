@@ -186,9 +186,13 @@ Configure the client with these options:
 - `agentId` selects a registered agent and defaults to the plugin default agent.
 - `genieSpace` selects a configured Genie alias and bypasses the agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
-- `showSelectedModel` shows a per-turn activity row as soon as routing
-  completes, with the friendly model name followed by the concrete serving
-  endpoint. It is off by default.
+- `showSelectedModel` adds the friendly model name to the assistant footer as
+  soon as routing completes, with the concrete serving endpoint on hover or
+  keyboard focus. It is off by default.
+- `metrics` adds one or more right-aligned per-turn footer counters: `tokens`,
+  `time`, `dbu`, or `usd`. It is off by default. Hovering or focusing the
+  metric group shows all four values even when only a subset is visible.
+- `enableRetry={false}` hides retry actions. Retry is enabled by default.
 - `onModelRoute` receives the concrete endpoint as soon as routing completes.
 - `onModelUsage` receives the latest cumulative tokens after each completed
   model step, along with the resolved endpoint, Smart Router observation when

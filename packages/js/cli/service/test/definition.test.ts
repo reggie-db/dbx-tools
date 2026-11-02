@@ -12,6 +12,7 @@ describe("CLI service definition", () => {
     assert.equal(definition.id, "dbx-tools.cli-service");
     assert.equal(definition.name, "dbx service");
     assert.match(definition.version ?? "", /^\d+\.\d+\.\d+/);
+    assert.equal(definition.waitForAuth, "auto");
   });
 
   it("accepts a tray, managed command, and URL item", () => {
@@ -22,6 +23,10 @@ describe("CLI service definition", () => {
       version: "1.2.3",
       icon: "/opt/example/icon.png",
       pythonPackage: { name: "example-runtime" },
+      waitForAuth: "true",
+      authCommand: {
+        entrypoint: "/opt/example/src/auth.ts",
+      },
       command: {
         entrypoint: "/opt/example/src/example.ts",
         arguments: ["serve"],
@@ -36,6 +41,8 @@ describe("CLI service definition", () => {
     });
 
     assert.equal(definition.command?.arguments?.[0], "serve");
+    assert.equal(definition.waitForAuth, "true");
+    assert.equal(definition.authCommand?.entrypoint, "/opt/example/src/auth.ts");
     assert.deepEqual(definition.pythonPackage, {
       name: "example-runtime",
       python: "3.11",
@@ -56,6 +63,7 @@ describe("CLI service definition", () => {
       NODE_ENV: "development",
       SAMPLE: "configured",
     });
+    assert.deepEqual(definition.authCommand, undefined);
   });
 
   it("rejects unsafe identifiers and URL protocols", () => {

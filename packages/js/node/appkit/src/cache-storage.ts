@@ -27,8 +27,8 @@ import {
 } from "@dbx-tools/cache";
 import { postgresConnectionOptions } from "@dbx-tools/postgres";
 import { log, toError, id } from "@dbx-tools/shared-core";
-import { handleOwnershipMigrationError } from "./migration.ts";
 import { createWorkspaceClient } from "./databricks.ts";
+import { handleOwnershipMigrationError } from "./migration.ts";
 
 const logger = log.logger("cache-storage");
 
@@ -317,9 +317,7 @@ async function createPersistentStorage(
   let pool: LakebasePool | undefined;
   try {
     const workspaceClient = (await createWorkspaceClient()).toLegacyWorkspaceClient();
-    const createdPool = createLakebasePool(
-      postgresConnectionOptions({ workspaceClient }),
-    );
+    const createdPool = createLakebasePool(postgresConnectionOptions({ workspaceClient }));
     pool = createdPool;
     const storage = new PersistentStorage(cache ?? {}, createdPool);
     softenInitialize(storage, () => tableOwnedByAnotherRole(storage, createdPool));

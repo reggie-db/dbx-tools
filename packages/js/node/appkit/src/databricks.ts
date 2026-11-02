@@ -17,11 +17,7 @@ import {
 } from "@databricks/appkit";
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
-import {
-  type AuthClient,
-  type DatabricksAuthOptions,
-  createAuthClient,
-} from "@dbx-tools/auth";
+import { type AuthClient, type DatabricksAuthOptions, createAuthClient } from "@dbx-tools/auth";
 import { tieAbortSignal } from "@dbx-tools/shared-core";
 
 const workspaceAuth = new WeakMap<WorkspaceClient, AuthClient>();

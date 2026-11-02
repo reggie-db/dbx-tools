@@ -11,6 +11,7 @@ import {
   type CliServiceCliDependencies,
   defineService,
   type CliServiceDefinition,
+  type CliServiceInstallOptions,
 } from "@dbx-tools/cli-service";
 import {
   ModelGatewayCliOptionsSchema,
@@ -22,6 +23,7 @@ import { Command } from "commander";
 
 import { selectSmartRouterModel, startModelGateway } from "./server.ts";
 import { PACKAGE_VERSION } from "../../index.ts";
+import { databricksServiceAuthCommand } from "../service-auth.ts";
 
 /** Injectable foreground gateway boundary for CLI tests. */
 export interface ModelGatewayCliDependencies {
@@ -39,6 +41,7 @@ const DEFAULT_DEPENDENCIES: ModelGatewayCliDependencies = {
 /** Build the tray-only model-gateway service definition. */
 export function modelGatewayServiceDefinition(
   options: ModelGatewayOptions = {},
+  serviceOptions: Pick<CliServiceInstallOptions, "waitForAuth"> = {},
 ): CliServiceDefinition {
   const {
     runtimeInfo: _,
@@ -47,9 +50,12 @@ export function modelGatewayServiceDefinition(
     ...resolved
   } = resolveModelGatewayCliOptions(options);
   const host = urlHost(resolved.listen.host);
+  const waitForAuth = serviceOptions.waitForAuth ?? "auto";
   return defineService(import.meta.url, {
     id: "dbx-tools.cli-model-gateway",
     name: "dbx model gateway",
+    waitForAuth,
+    authCommand: databricksServiceAuthCommand(waitForAuth, resolved.profile),
     command: {
       binName: "dbx-model-gateway",
       arguments: serializeArgs(resolved),
@@ -91,8 +97,8 @@ export function buildProgram(
     }
     await dependencies.start(serverOptions);
   });
-  const serviceCommand = buildServiceCommand(() => {
-    return modelGatewayServiceDefinition(modelGatewayOptions(program));
+  const serviceCommand = buildServiceCommand((serviceOptions) => {
+    return modelGatewayServiceDefinition(modelGatewayOptions(program), serviceOptions);
   }, dependencies.service);
   program.addCommand(serviceCommand);
   return program;

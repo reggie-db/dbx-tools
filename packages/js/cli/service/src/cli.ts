@@ -12,10 +12,16 @@ import { spawn } from "@dbx-tools/core";
 import { Command } from "commander";
 
 import type { CliServiceDefinition } from "./definition.ts";
-import { CliService, CliServiceInstallOptionsSchema, type CliServiceLifecycle } from "./service.ts";
+import {
+  CliService,
+  CliServiceInstallOptionsSchema,
+  type CliServiceInstallOptions,
+  type CliServiceLifecycle,
+} from "./service.ts";
 
 /** Static definition or action-time factory used by a service command group. */
-export type CliServiceDefinitionSource = CliServiceDefinition | (() => CliServiceDefinition);
+export type CliServiceDefinitionSource =
+  CliServiceDefinition | ((options?: CliServiceInstallOptions) => CliServiceDefinition);
 
 /** Injectable lifecycle and output boundary for service CLI tests and composition. */
 export interface CliServiceCliDependencies {
@@ -41,7 +47,7 @@ export function buildServiceCommand(
   dependencies: CliServiceCliDependencies = DEFAULT_DEPENDENCIES,
 ): Command {
   const definition = resolveDefinition(source);
-  const service = () => dependencies.create(definition());
+  const service = (options?: CliServiceInstallOptions) => dependencies.create(definition(options));
   const execute = dependencies.execute ?? DEFAULT_DEPENDENCIES.execute;
   const command = new Command("service")
     .enablePositionalOptions()
@@ -56,7 +62,8 @@ export function buildServiceCommand(
     CliServiceInstallOptionsSchema,
   );
   install.action(async () => {
-    await service().install(parseArgs(install, CliServiceInstallOptionsSchema));
+    const options = parseArgs(install, CliServiceInstallOptionsSchema);
+    await service(options).install(options);
   });
 
   command
@@ -114,6 +121,8 @@ export function buildServiceCommand(
   return command;
 }
 
-function resolveDefinition(source: CliServiceDefinitionSource): () => CliServiceDefinition {
+function resolveDefinition(
+  source: CliServiceDefinitionSource,
+): (options?: CliServiceInstallOptions) => CliServiceDefinition {
   return typeof source === "function" ? source : () => source;
 }

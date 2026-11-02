@@ -167,10 +167,7 @@ function contextFromEvents(
   };
 }
 
-function conversationEvents(
-  input: unknown,
-  removeNonUsefulMessages: boolean,
-): ModelContextEvent[] {
+function conversationEvents(input: unknown, removeNonUsefulMessages: boolean): ModelContextEvent[] {
   if (typeof input === "string") return input.trim() ? [{ role: "user", text: input.trim() }] : [];
   if (Array.isArray(input)) {
     return input.flatMap((value) => messageEvent(value, removeNonUsefulMessages));

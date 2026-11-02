@@ -109,9 +109,11 @@ describe("shared model-gateway schemas", () => {
             created: 0,
             owned_by: "databricks",
             name: "GPT Test",
+            model_source: "foundation",
             status: { deprecated: false },
             capabilities: {
               smart_router: false,
+              ai_decide: false,
               tools: true,
               reasoning: ["high"],
               responses: true,

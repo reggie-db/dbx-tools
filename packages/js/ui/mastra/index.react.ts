@@ -49,7 +49,8 @@ export { useMastraAssistant, MastraAssistant } from "./src/react/mastra-assistan
 export type { MastraAssistantMode, MastraAssistantSide, MastraAssistantLauncherPosition, MastraAssistantResizeOptions, MastraAssistantLauncherOptions, MastraAssistantController, MastraAssistantProps } from "./src/react/mastra-assistant.tsx";
 export { useMastraChat, MastraChat } from "./src/react/mastra-chat.tsx";
 export type { ThreadIdChangeReason, BrowserConversationPersistenceOptions, UseMastraChatOptions, UseMastraChatResult, MastraChatProps } from "./src/react/mastra-chat.tsx";
-export { selectedModelRoute, SelectedModelPill } from "./src/react/selected-model-pill.tsx";
+export { selectedModelActivity, selectedModelRoute, normalizeChatMetrics, selectedModelTurnMetrics, SelectedModelPill } from "./src/react/selected-model-pill.tsx";
+export type { SelectedModelActivity, SelectedModelMessage, SelectedModelTurnMetrics } from "./src/react/selected-model-pill.tsx";
 export { SuggestionPills } from "./src/react/suggestion-pills.tsx";
 export type { SuggestionPillsProps } from "./src/react/suggestion-pills.tsx";
 export { dedupeSuggestions, collectSuggestions } from "./src/react/suggestions.ts";
@@ -60,5 +61,5 @@ export type { ThreadTabsProps, ThreadActionsProps } from "./src/react/thread-tab
 export { humanizeToolName, formatRawToolPayload, structuredToolPayload, detectToolSourceLanguage, toolInputPresentation, toolOutputPresentation, webSearchProgressGroups, webSearchQueryLabel, webSearchResultLabel, ToolSessionPill } from "./src/react/tool-pill.tsx";
 export type { ToolInputPresentation, WebSearchProgressGroup } from "./src/react/tool-pill.tsx";
 export { isActiveChatStatus, isRespondingChatStatus } from "./src/react/types.ts";
-export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, ChatInputMessage, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
+export type { ChatStatus, ChatMetric, ChatMetrics, ToolEvent, ToolProgress, ChatModelOption, ChatInputMessage, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ThreadPlacement, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types.ts";
 export { useChatThreadQuery } from "./src/react/use-chat-thread-query.ts";

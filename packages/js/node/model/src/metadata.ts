@@ -43,7 +43,6 @@ import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type
 import tokenPricesSnapshotJson from "./generated/model-token-prices.json" with { type: "json" };
 import modelParamsSnapshotJson from "./generated/modelparams-reasoning.json" with { type: "json" };
 import modelsDevSnapshotJson from "./generated/models-dev-capabilities.json" with { type: "json" };
-import { loadLMArenaCatalog } from "./lm-arena.ts";
 import {
   createMetadataCache,
   mergePreferFreshList,
@@ -236,8 +235,10 @@ const latencyScoreCache = createMetadataCache<Readonly<Record<string, ModelLaten
 const ratingsCache = createMetadataCache<Readonly<Record<string, ModelRating>>>({
   key: "model-ratings",
   fallback: ratingsSnapshot.catalogue.models,
-  load: async () =>
-    parseArenaModelRatings(await loadLMArenaCatalog(), nowSeconds()).catalogue.models,
+  load: async () => {
+    const { loadLMArenaCatalog } = await import("./lm-arena.ts");
+    return parseArenaModelRatings(await loadLMArenaCatalog(), nowSeconds()).catalogue.models;
+  },
   merge: mergePreferFreshRecord,
 });
 

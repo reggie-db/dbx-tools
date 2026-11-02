@@ -16,6 +16,12 @@ import type { ExportFormat } from "../support/export.ts";
 /** User-visible lifecycle state of the active chat turn. */
 export type ChatStatus = "submitted" | "streaming" | "finishing" | "ready" | "error";
 
+/** Per-turn metric available in the compact assistant activity row. */
+export type ChatMetric = "tokens" | "time" | "dbu" | "usd";
+
+/** One or more per-turn metrics shown beside the selected model. */
+export type ChatMetrics = ChatMetric | readonly ChatMetric[];
+
 /** Whether a turn still owns its session and queues new messages. */
 export const isActiveChatStatus = (status: ChatStatus): boolean =>
   status === "submitted" || status === "streaming" || status === "finishing";
@@ -189,11 +195,17 @@ export type ChatViewProps = {
   /** Maximum post-turn follow-up questions shown under one response. */
   followUpSuggestionLimit?: number;
   /**
-   * Show the concrete model selected for each assistant turn. Off by default.
-   * The compact activity row appears as soon as the streamed model-route part
-   * arrives and shows both the friendly model name and endpoint id.
+   * Show the friendly name of the model selected for each assistant turn. Off by default.
+   * The compact assistant footer appears as soon as the streamed model-route part
+   * arrives; the concrete endpoint id is available on hover or keyboard focus.
    */
   showSelectedModel?: boolean;
+  /**
+   * Per-turn metrics shown at the right edge of the assistant footer.
+   * Pass one metric or an array containing `tokens`, `time`, `dbu`, and/or
+   * `usd`. Omit to hide metrics. Hovering or focusing the group shows all four.
+   */
+  metrics?: ChatMetrics;
   toolEventsByMessage?: Record<string, ToolEvent[]>;
   /** Available model endpoints. Pass an empty array (or omit) to hide the picker. */
   models?: ChatModelOption[];

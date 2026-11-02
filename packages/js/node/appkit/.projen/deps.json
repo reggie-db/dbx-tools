@@ -11,6 +11,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/shared-auth",
+      "version": "workspace:*",
+      "type": "build"
+    },
+    {
       "name": "@types/json-schema",
       "version": "catalog:",
       "type": "build"

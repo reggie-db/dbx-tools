@@ -441,7 +441,12 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
-  p.addDevDeps("@dbx-tools/projen@workspace:*", "@types/json-schema@catalog:", "vitest@catalog:");
+  p.addDevDeps(
+    "@dbx-tools/projen@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@types/json-schema@catalog:",
+    "vitest@catalog:",
+  );
 });
 
 // AppKit durable-memory tools with Databricks-first routing and lazy Graphiti fallback.
@@ -631,9 +636,12 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
     "description",
     "Region-aware Zerobus ingest helpers for Databricks workspaces",
   );
-  p.addDeps("@dbx-tools/databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
+  p.addDeps(
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@databricks/zerobus-ingest-sdk@^1.1.0",
+  );
 });
-
 
 // node-email: server-side email add-on - SMTP transport (nodemailer) / local
 // outbox, React Email rendering, on-behalf-of sender

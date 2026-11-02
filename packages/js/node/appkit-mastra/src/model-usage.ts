@@ -1,5 +1,6 @@
 /** Caller-facing Mastra model routing and token-usage events. */
 
+import { estimateModelTokenPrice } from "@dbx-tools/model";
 import {
   MODEL_ROUTE_PART_TYPE,
   MODEL_USAGE_PART_TYPE,
@@ -8,7 +9,6 @@ import {
   type ModelRoutePartData,
   type ModelUsagePartData,
 } from "@dbx-tools/shared-mastra";
-import { estimateModelTokenPrice } from "@dbx-tools/model";
 import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_MODEL_ROUTE_KEY, type MastraModelRoute } from "./serving.ts";

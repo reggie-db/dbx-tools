@@ -8,28 +8,16 @@ import {
 } from "@databricks/appkit-ui/react";
 import { getAuthStatus } from "@dbx-tools/shared-auth";
 import {
-  MODEL_ROUTE_PART_TYPE,
-  MODEL_USAGE_PART_TYPE,
-  ModelRoutePartDataSchema,
-  ModelUsagePartDataSchema,
-  type ModelRoutePartData,
-  type ModelUsagePartData,
-} from "@dbx-tools/shared-mastra";
-import {
   ChatComposer,
   ChatView,
   isActiveChatStatus,
-  isRespondingChatStatus,
+  selectedModelTurnMetrics,
   SuggestionPills,
   type ChatModelOption,
   type ChatStatus,
   useMastraChat,
 } from "@dbx-tools/ui-mastra/react";
-import {
-  readBrowserMessageTimestamps,
-  useMastraClient,
-  useMastraModels,
-} from "@dbx-tools/ui-mastra/support";
+import { useMastraClient, useMastraModels } from "@dbx-tools/ui-mastra/support";
 import {
   LoaderCircleIcon,
   PlusIcon,
@@ -114,10 +102,7 @@ function readStoredPanes(): PaneDescriptor[] | undefined {
 
 function storePanes(panes: readonly PaneDescriptor[]): void {
   try {
-    window.localStorage.setItem(
-      PANES_STORAGE_KEY,
-      JSON.stringify({ version: 1, panes }),
-    );
+    window.localStorage.setItem(PANES_STORAGE_KEY, JSON.stringify({ version: 1, panes }));
   } catch {
     // Browser persistence is best-effort; the live comparison remains usable.
   }
@@ -129,8 +114,6 @@ type PaneController = {
   context: () => { title: string; messages: readonly ChatMessageLike[] };
 };
 
-type UsageMap = Record<string, ModelUsagePartData>;
-
 function defaultPanes(
   models: readonly ChatModelOption[],
   genieAvailable: boolean,
@@ -138,32 +121,40 @@ function defaultPanes(
 ): PaneDescriptor[] {
   const panes: PaneDescriptor[] = [];
   if (models.some((model) => model.name === SMART_ROUTER_MODEL)) {
-    panes.push(createPane({
-      kind: "mastra",
-      title: "Smart Router",
-      initialModel: SMART_ROUTER_MODEL,
-    }));
+    panes.push(
+      createPane({
+        kind: "mastra",
+        title: "Smart Router",
+        initialModel: SMART_ROUTER_MODEL,
+      }),
+    );
   }
   if (models.some((model) => model.name === AI_DECIDE_MODEL)) {
-    panes.push(createPane({
-      kind: "mastra",
-      title: "AI Decide",
-      initialModel: AI_DECIDE_MODEL,
-    }));
+    panes.push(
+      createPane({
+        kind: "mastra",
+        title: "AI Decide",
+        initialModel: AI_DECIDE_MODEL,
+      }),
+    );
   }
   if (rankedModels.gpt) {
-    panes.push(createPane({
-      kind: "mastra",
-      title: "OpenAI",
-      initialModel: rankedModels.gpt.name,
-    }));
+    panes.push(
+      createPane({
+        kind: "mastra",
+        title: "OpenAI",
+        initialModel: rankedModels.gpt.name,
+      }),
+    );
   }
   if (rankedModels.claude) {
-    panes.push(createPane({
-      kind: "mastra",
-      title: "Anthropic",
-      initialModel: rankedModels.claude.name,
-    }));
+    panes.push(
+      createPane({
+        kind: "mastra",
+        title: "Anthropic",
+        initialModel: rankedModels.claude.name,
+      }),
+    );
   }
   if (genieAvailable) {
     panes.push(createPane({ kind: "genie", title: "Genie only" }));
@@ -351,10 +342,7 @@ const SmartRouter = () => {
   };
   const addPane = (value: string) => {
     if (value === GENIE_VALUE) {
-      setPanes((current) => [
-        ...current,
-        createPane({ kind: "genie", title: "Genie only" }),
-      ]);
+      setPanes((current) => [...current, createPane({ kind: "genie", title: "Genie only" })]);
       return;
     }
     const initialModel = value;
@@ -515,30 +503,6 @@ const ModelChatPane = ({
   onStatusChange: (id: string, status?: ChatStatus) => void;
   onContextRestored: () => void;
 }) => {
-  const [metricScope, setMetricScope] = useState<"current" | "total">("current");
-  const [usage, setUsage] = useState<UsageMap>({});
-  const [requestUsage, setRequestUsage] = useState<ModelUsagePartData | undefined>();
-  const [route, setRoute] = useState<ModelRoutePartData | undefined>();
-  const [latencyMs, setLatencyMs] = useState<number | undefined>();
-  const [totalTimeMs, setTotalTimeMs] = useState(0);
-  const [timerNow, setTimerNow] = useState(() => performance.now());
-  const startedAt = useRef<number | undefined>(undefined);
-  const assistantTextBaseline = useRef(0);
-  const finishTiming = useCallback(() => {
-    if (startedAt.current === undefined) return;
-    const elapsed = performance.now() - startedAt.current;
-    setLatencyMs(elapsed);
-    setTotalTimeMs((total) => total + elapsed);
-    startedAt.current = undefined;
-  }, []);
-  const recordModelUsage = useCallback((item: ModelUsagePartData) => {
-    setRequestUsage(item);
-    setRoute(item);
-    recordUsage(setUsage, item);
-  }, []);
-  const recordModelRoute = useCallback((item: ModelRoutePartData) => {
-    setRoute(item);
-  }, []);
   const chat = useMastraChat({
     ...(pane.kind === "genie"
       ? { genieSpace: "default" }
@@ -547,11 +511,12 @@ const ModelChatPane = ({
           model: pane.initialModel,
           aiDecideStrategy: pane.initialModel === AI_DECIDE_MODEL ? "cost" : undefined,
           conversationHistory: "browser",
-          onModelRoute: recordModelRoute,
-          onModelUsage: recordModelUsage,
         }),
     showSelectedModel: true,
+    metrics: ["time", "usd"],
     enableClear: true,
+    enableRetry: false,
+    enableFeedback: false,
     browserPersistence: true,
     queueMessages: false,
     suggestions: [],
@@ -561,18 +526,11 @@ const ModelChatPane = ({
   });
   const messagesRef = useRef(chat.messages);
   messagesRef.current = chat.messages;
+  const totalMetrics = conversationTotalMetrics(chat.messages);
   const restoredContextReported = useRef(false);
-  const restoredMetricsApplied = useRef(false);
 
   useEffect(() => {
-    if (!chat.browserPersistenceHydrated || restoredMetricsApplied.current) return;
-    restoredMetricsApplied.current = true;
-    const restored = conversationMetrics(chat.messages);
-    setUsage(restored.usage);
-    setRequestUsage(restored.requestUsage);
-    setRoute(restored.route);
-    setLatencyMs(restored.latencyMs);
-    setTotalTimeMs(restored.totalTimeMs);
+    if (!chat.browserPersistenceHydrated) return;
     if (!restoredContextReported.current && chat.messages.length > 0) {
       restoredContextReported.current = true;
       onContextRestored();
@@ -580,47 +538,13 @@ const ModelChatPane = ({
   }, [chat.browserPersistenceHydrated, chat.messages, onContextRestored]);
 
   useEffect(() => {
-    if (!isRespondingChatStatus(chat.status)) return;
-    let frame = 0;
-    const update = () => {
-      setTimerNow(performance.now());
-      frame = requestAnimationFrame(update);
-    };
-    update();
-    return () => cancelAnimationFrame(frame);
-  }, [chat.status]);
-
-  useEffect(() => {
     onStatusChange(pane.id, chat.status);
-    if (!isRespondingChatStatus(chat.status)) finishTiming();
-  }, [chat.status, finishTiming, onStatusChange, pane.id]);
+  }, [chat.status, onStatusChange, pane.id]);
   useEffect(() => {
     onRegister(pane.id, {
-      send: (text) => {
-        const now = performance.now();
-        if (startedAt.current !== undefined) {
-          const interruptedElapsed = now - startedAt.current;
-          setLatencyMs(interruptedElapsed);
-          setTotalTimeMs((total) => total + interruptedElapsed);
-        }
-        assistantTextBaseline.current = assistantTextLength(messagesRef.current);
-        startedAt.current = now;
-        setRequestUsage(undefined);
-        if (pane.initialModel === SMART_ROUTER_MODEL || pane.initialModel === AI_DECIDE_MODEL) {
-          setRoute(undefined);
-        }
-        chat.sendMessage({ text });
-      },
+      send: (text) => chat.sendMessage({ text }),
       clear: async () => {
-        startedAt.current = undefined;
         await chat.onClear?.();
-        setUsage({});
-        setRequestUsage(undefined);
-        setRoute(undefined);
-        setLatencyMs(undefined);
-        setTotalTimeMs(0);
-        setTimerNow(performance.now());
-        assistantTextBaseline.current = 0;
       },
       context: () => ({ title: pane.title, messages: messagesRef.current }),
     });
@@ -630,98 +554,6 @@ const ModelChatPane = ({
     };
   }, [chat.onClear, chat.sendMessage, onRegister, onStatusChange, pane.id, pane.title]);
 
-  const usageValues = Object.values(usage);
-  const authoritativeTotalTokens = usageValues.reduce(
-    (sum, item) => sum + item.usage.totalTokens,
-    0,
-  );
-  const authoritativeTotalCost = usageValues.reduce(
-    (sum, item) => sum + (item.estimatedCostDbu ?? 0),
-    0,
-  );
-  const hasAuthoritativeCost = usageValues.some((item) => item.estimatedCostDbu !== undefined);
-  const responding = isRespondingChatStatus(chat.status);
-  const streamedOutputTokens = responding
-    ? Math.ceil(Math.max(0, assistantTextLength(chat.messages) - assistantTextBaseline.current) / 4)
-    : 0;
-  const authoritativeRequestTokens = requestUsage?.usage.totalTokens ?? 0;
-  const requestTokenTarget = requestUsage
-    ? authoritativeRequestTokens +
-      (responding ? Math.max(0, streamedOutputTokens - requestUsage.usage.outputTokens) : 0)
-    : responding
-      ? streamedOutputTokens
-      : undefined;
-  const requestCostEstimate = route?.pricing
-    ? estimateRequestCost(route.pricing, {
-        inputTokens: requestUsage?.usage.inputTokens ?? 0,
-        outputTokens: responding
-          ? Math.max(requestUsage?.usage.outputTokens ?? 0, streamedOutputTokens)
-          : (requestUsage?.usage.outputTokens ?? 0),
-        cachedInputTokens: requestUsage?.usage.cachedInputTokens ?? 0,
-      })
-    : undefined;
-  const requestUsdEstimate = route?.pricing
-    ? estimateRequestUsd(route.pricing, {
-        inputTokens: requestUsage?.usage.inputTokens ?? 0,
-        outputTokens: responding
-          ? Math.max(requestUsage?.usage.outputTokens ?? 0, streamedOutputTokens)
-          : (requestUsage?.usage.outputTokens ?? 0),
-        cachedInputTokens: requestUsage?.usage.cachedInputTokens ?? 0,
-      })
-    : undefined;
-  const authoritativeRequestCost = requestUsage?.estimatedCostDbu;
-  const authoritativeRequestUsd = estimatedUsageUsd(requestUsage);
-  const requestCostTarget = responding
-    ? maxDefined(authoritativeRequestCost, requestCostEstimate)
-    : authoritativeRequestCost;
-  const requestUsdTarget = responding
-    ? maxDefined(authoritativeRequestUsd, requestUsdEstimate)
-    : authoritativeRequestUsd;
-  const totalTokenTarget =
-    usageValues.length > 0 || requestTokenTarget !== undefined
-      ? authoritativeTotalTokens +
-        (responding ? Math.max(0, (requestTokenTarget ?? 0) - authoritativeRequestTokens) : 0)
-      : undefined;
-  const totalCostTarget =
-    hasAuthoritativeCost || requestCostTarget !== undefined
-      ? authoritativeTotalCost +
-        (responding ? Math.max(0, (requestCostTarget ?? 0) - (authoritativeRequestCost ?? 0)) : 0)
-      : undefined;
-  const authoritativeTotalUsd = usageValues.reduce(
-    (sum, item) => sum + (estimatedUsageUsd(item) ?? 0),
-    0,
-  );
-  const hasAuthoritativeUsd = usageValues.some((item) => estimatedUsageUsd(item) !== undefined);
-  const totalUsdTarget =
-    hasAuthoritativeUsd || requestUsdTarget !== undefined
-      ? authoritativeTotalUsd +
-        (responding
-          ? Math.max(0, (requestUsdTarget ?? 0) - (authoritativeRequestUsd ?? 0))
-          : 0)
-      : undefined;
-  const displayedRequestTokens = useAnimatedNumber(requestTokenTarget, responding, 1);
-  const displayedTotalTokens = useAnimatedNumber(totalTokenTarget, responding, 1);
-  const displayedRequestCost = useAnimatedNumber(requestCostTarget, responding, 0.0000001);
-  const displayedTotalCost = useAnimatedNumber(totalCostTarget, responding, 0.0000001);
-  const displayedRequestUsd = useAnimatedNumber(requestUsdTarget, responding, 0.0000001);
-  const displayedTotalUsd = useAnimatedNumber(totalUsdTarget, responding, 0.0000001);
-  const activeElapsed =
-    startedAt.current === undefined ? 0 : Math.max(0, timerNow - startedAt.current);
-  const requestTimeMs = startedAt.current === undefined ? latencyMs : activeElapsed;
-  const displayedTotalTimeMs = totalTimeMs + activeElapsed;
-  const currentMetrics: MetricValues = {
-    tokens: formatTokens(displayedRequestTokens),
-    time: requestTimeMs === undefined ? "—" : formatDuration(requestTimeMs),
-    dbu: formatCost(displayedRequestCost),
-    usd: formatUsd(displayedRequestUsd),
-  };
-  const totalMetrics: MetricValues = {
-    tokens: formatTokens(displayedTotalTokens),
-    time: displayedTotalTimeMs > 0 ? formatDuration(displayedTotalTimeMs) : "—",
-    dbu: formatCost(displayedTotalCost),
-    usd: formatUsd(displayedTotalUsd),
-  };
-  const mobileMetrics = metricScope === "current" ? currentMetrics : totalMetrics;
   return (
     <section className="flex min-h-0 w-[calc(100dvw-3rem)] min-w-[calc(100dvw-3rem)] shrink-0 snap-start snap-always flex-col overflow-hidden border border-border bg-background sm:w-full sm:min-w-[20rem] sm:flex-1 sm:basis-0 xl:min-w-[20rem]">
       <header className="shrink-0 border-b border-border/70 px-3 py-2">
@@ -746,41 +578,15 @@ const ModelChatPane = ({
             <XIcon className="size-3.5" />
           </Button>
         </div>
-        <div className="mt-1 flex justify-end sm:hidden">
-          <div
-            className="flex shrink-0 rounded-full bg-muted/60 p-0.5"
-            role="group"
-            aria-label="Metric scope"
-          >
-            <Button
-              type="button"
-              variant={metricScope === "current" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-5 rounded-full px-2 text-[10px]"
-              aria-pressed={metricScope === "current"}
-              onClick={() => setMetricScope("current")}
-            >
-              Turn
-            </Button>
-            <Button
-              type="button"
-              variant={metricScope === "total" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-5 rounded-full px-2 text-[10px]"
-              aria-pressed={metricScope === "total"}
-              onClick={() => setMetricScope("total")}
-            >
-              Total
-            </Button>
-          </div>
+        <div
+          className="mt-1.5 grid grid-cols-4 divide-x divide-border/60 rounded-md bg-muted/35 py-1 text-xs"
+          aria-label="Conversation totals"
+        >
+          <Metric label="Tokens" value={formatTotalTokens(totalMetrics.tokens)} />
+          <Metric label="Time" value={formatTotalDuration(totalMetrics.timeMs)} />
+          <Metric label="DBU" value={formatTotalDbu(totalMetrics.dbu)} />
+          <Metric label="USD" value={formatTotalUsd(totalMetrics.usd)} />
         </div>
-        <div className="mt-1.5 grid grid-cols-4 divide-x divide-border/60 rounded-md bg-muted/35 py-1 text-xs sm:hidden">
-          <Metric label="Tokens" value={mobileMetrics.tokens} />
-          <Metric label="Time" value={mobileMetrics.time} />
-          <Metric label="DBU" value={mobileMetrics.dbu} />
-          <Metric label="USD" value={mobileMetrics.usd} />
-        </div>
-        <MetricTable current={currentMetrics} total={totalMetrics} />
       </header>
       <div className="flex min-h-0 flex-1">
         <ChatView
@@ -798,100 +604,62 @@ const ModelChatPane = ({
   );
 };
 
-type MetricValues = {
-  tokens: string;
-  time: string;
-  dbu: string;
-  usd: string;
+type ConversationTotalMetrics = {
+  tokens?: number;
+  timeMs?: number;
+  dbu?: number;
+  usd?: number;
 };
 
-const MetricTable = ({ current, total }: { current: MetricValues; total: MetricValues }) => (
-  <table className="mt-1.5 hidden w-full table-fixed overflow-hidden rounded-md bg-muted/35 text-[10px] sm:table">
-    <caption className="sr-only">Turn and total conversation metrics</caption>
-    <colgroup>
-      <col className="w-12" />
-      <col />
-      <col />
-      <col />
-      <col />
-    </colgroup>
-    <thead className="text-muted-foreground">
-      <tr className="border-b border-border/60">
-        <th scope="col" aria-label="Metric scope" />
-        <MetricHeading>Tokens</MetricHeading>
-        <MetricHeading>Time</MetricHeading>
-        <MetricHeading>DBU</MetricHeading>
-        <MetricHeading>USD</MetricHeading>
-      </tr>
-    </thead>
-    <tbody>
-      <MetricTableRow label="Turn" values={current} />
-      <MetricTableRow label="Total" values={total} />
-    </tbody>
-  </table>
-);
+function conversationTotalMetrics(messages: readonly ChatMessageLike[]): ConversationTotalMetrics {
+  const totals = { tokens: 0, timeMs: 0, dbu: 0, usd: 0 };
+  const available = { tokens: false, timeMs: false, dbu: false, usd: false };
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    const metrics = selectedModelTurnMetrics(message);
+    if (!metrics) continue;
+    for (const metric of ["tokens", "timeMs", "dbu", "usd"] as const) {
+      const value = metrics[metric];
+      if (value === undefined) continue;
+      totals[metric] += value;
+      available[metric] = true;
+    }
+  }
+  return {
+    ...(available.tokens ? { tokens: totals.tokens } : {}),
+    ...(available.timeMs ? { timeMs: totals.timeMs } : {}),
+    ...(available.dbu ? { dbu: totals.dbu } : {}),
+    ...(available.usd ? { usd: totals.usd } : {}),
+  };
+}
 
-const MetricHeading = ({ children }: { children: React.ReactNode }) => (
-  <th scope="col" className="truncate px-1 py-0.5 text-left font-normal leading-3">
-    {children}
-  </th>
-);
-
-const MetricTableRow = ({ label, values }: { label: string; values: MetricValues }) => (
-  <tr className="border-b border-border/40 last:border-b-0">
-    <th
-      scope="row"
-      className="truncate px-1.5 py-0.5 text-left font-medium leading-4 text-muted-foreground"
-    >
-      {label}
-    </th>
-    <MetricTableValue value={values.tokens} />
-    <MetricTableValue value={values.time} />
-    <MetricTableValue value={values.dbu} />
-    <MetricTableValue value={values.usd} />
-  </tr>
-);
-
-const MetricTableValue = ({ value }: { value: string }) => (
-  <td className="px-1 py-0.5 leading-4 text-foreground tabular-nums" title={value}>
-    <span className="block truncate">{value}</span>
-  </td>
-);
-
-const Metric = ({ label, value, title }: { label: string; value: string; title?: string }) => (
-  <div className="min-w-0 px-2 py-0.5 first:pl-1.5 last:pr-1.5">
+const Metric = ({ label, value }: { label: string; value: string }) => (
+  <div className="min-w-0 px-1.5 py-0.5">
     <div className="truncate text-[10px] leading-3 text-muted-foreground">{label}</div>
     <div
       className="truncate text-[11px] font-medium leading-4 text-foreground tabular-nums"
-      title={title}
+      title={value}
     >
       {value}
     </div>
   </div>
 );
 
-function recordUsage(
-  setter: React.Dispatch<React.SetStateAction<UsageMap>>,
-  usage: ModelUsagePartData,
-): void {
-  const key = usage.runId ?? `${usage.model}:${Date.now()}`;
-  setter((current) => ({ ...current, [key]: usage }));
-}
-
-function formatDuration(value: number): string {
-  return value < 1_000 ? `${Math.round(value)} ms` : `${(value / 1_000).toFixed(1)} s`;
-}
-
-function formatTokens(value: number | undefined): string {
+function formatTotalTokens(value: number | undefined): string {
   return value === undefined ? "—" : Math.round(value).toLocaleString();
 }
 
-function formatCost(value: number | undefined): string {
+function formatTotalDuration(value: number | undefined): string {
+  if (value === undefined) return "—";
+  return value < 1_000 ? `${Math.round(value)} ms` : `${(value / 1_000).toFixed(1)} s`;
+}
+
+function formatTotalDbu(value: number | undefined): string {
   if (value === undefined) return "—";
   return value < 0.001 ? value.toFixed(6) : value.toFixed(4);
 }
 
-function formatUsd(value: number | undefined): string {
+function formatTotalUsd(value: number | undefined): string {
   if (value === undefined) return "—";
   return `$${value < 0.01 ? value.toFixed(6) : value.toFixed(4)}`;
 }
@@ -902,148 +670,5 @@ type ChatMessageLike = {
   metadata?: unknown;
   parts: readonly { type: string; text?: string; data?: unknown }[];
 };
-
-type ConversationMetrics = {
-  usage: UsageMap;
-  requestUsage?: ModelUsagePartData;
-  route?: ModelRoutePartData;
-  latencyMs?: number;
-  totalTimeMs: number;
-};
-
-function conversationMetrics(messages: readonly ChatMessageLike[]): ConversationMetrics {
-  const usage: UsageMap = {};
-  let requestUsage: ModelUsagePartData | undefined;
-  let route: ModelRoutePartData | undefined;
-  let latencyMs: number | undefined;
-  let totalTimeMs = 0;
-  for (const message of messages) {
-    if (message.role !== "assistant") continue;
-    for (const part of message.parts) {
-      if (part.type === MODEL_ROUTE_PART_TYPE) {
-        const parsed = ModelRoutePartDataSchema.safeParse(part.data);
-        if (parsed.success) route = parsed.data;
-      }
-      if (part.type === MODEL_USAGE_PART_TYPE) {
-        const parsed = ModelUsagePartDataSchema.safeParse(part.data);
-        if (!parsed.success) continue;
-        const item = parsed.data;
-        usage[item.runId ?? message.id] = item;
-        requestUsage = item;
-        route = item;
-      }
-    }
-    const timestamps = readBrowserMessageTimestamps({ metadata: message.metadata });
-    if (!timestamps?.completedAt) continue;
-    const createdAt = Date.parse(timestamps.createdAt);
-    const completedAt = Date.parse(timestamps.completedAt);
-    if (!Number.isFinite(createdAt) || !Number.isFinite(completedAt)) continue;
-    const elapsed = Math.max(0, completedAt - createdAt);
-    latencyMs = elapsed;
-    totalTimeMs += elapsed;
-  }
-  return { usage, requestUsage, route, latencyMs, totalTimeMs };
-}
-
-function assistantTextLength(messages: readonly ChatMessageLike[]): number {
-  return messages.reduce((total, message) => {
-    if (message.role !== "assistant") return total;
-    return (
-      total +
-      message.parts.reduce(
-        (messageTotal, part) =>
-          messageTotal +
-          ((part.type === "text" || part.type === "reasoning") && typeof part.text === "string"
-            ? part.text.length
-            : 0),
-        0,
-      )
-    );
-  }, 0);
-}
-
-function estimateRequestCost(
-  pricing: NonNullable<ModelRoutePartData["pricing"]>,
-  usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number },
-): number | undefined {
-  const billableInputTokens = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
-  const components = [
-    [billableInputTokens, pricing.inputDbuPerMillionTokens],
-    [usage.outputTokens, pricing.outputDbuPerMillionTokens],
-    [usage.cachedInputTokens, pricing.cacheReadDbuPerMillionTokens],
-  ] as const;
-  let cost = 0;
-  for (const [tokens, dbuPerMillionTokens] of components) {
-    if (tokens === 0) continue;
-    if (dbuPerMillionTokens === null) return undefined;
-    cost += (tokens / 1_000_000) * dbuPerMillionTokens;
-  }
-  return cost;
-}
-
-function estimateRequestUsd(
-  pricing: NonNullable<ModelRoutePartData["pricing"]>,
-  usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number },
-): number | undefined {
-  const dbu = estimateRequestCost(pricing, usage);
-  const usdPerDbu = averageUsdPerDbu(pricing);
-  return dbu === undefined || usdPerDbu === undefined ? undefined : dbu * usdPerDbu;
-}
-
-function estimatedUsageUsd(usage: ModelUsagePartData | undefined): number | undefined {
-  if (!usage?.pricing || usage.estimatedCostDbu === undefined) return undefined;
-  const usdPerDbu = averageUsdPerDbu(usage.pricing);
-  return usdPerDbu === undefined ? undefined : usage.estimatedCostDbu * usdPerDbu;
-}
-
-function averageUsdPerDbu(
-  pricing: NonNullable<ModelRoutePartData["pricing"]>,
-): number | undefined {
-  const values = Object.values(pricing.usdPerDbu ?? {});
-  if (values.length === 0) return undefined;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function maxDefined(left: number | undefined, right: number | undefined): number | undefined {
-  if (left === undefined) return right;
-  if (right === undefined) return left;
-  return Math.max(left, right);
-}
-
-function useAnimatedNumber(
-  target: number | undefined,
-  animate: boolean,
-  minimumStep: number,
-): number | undefined {
-  const targetRef = useRef(target);
-  const [displayed, setDisplayed] = useState(target);
-
-  useEffect(() => {
-    targetRef.current = target;
-    setDisplayed((current) => {
-      if (target === undefined || current === undefined || !animate || target < current)
-        return target;
-      return current;
-    });
-  }, [animate, target]);
-
-  useEffect(() => {
-    if (!animate) return;
-    let frame = 0;
-    const update = () => {
-      setDisplayed((current) => {
-        const next = targetRef.current;
-        if (next === undefined || current === undefined || next <= current) return next;
-        const remaining = next - current;
-        return Math.min(next, current + Math.max(minimumStep, remaining * 0.18));
-      });
-      frame = requestAnimationFrame(update);
-    };
-    frame = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(frame);
-  }, [animate, minimumStep]);
-
-  return displayed;
-}
 
 export default SmartRouter;

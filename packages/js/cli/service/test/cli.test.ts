@@ -17,7 +17,7 @@ function testDependencies(
   const service: CliServiceLifecycle = {
     async install(options) {
       calls.push(
-        `install:${String(options?.start)}:${options?.pythonProject ?? ""}:${String(options?.offline)}`,
+        `install:${String(options?.start)}:${options?.pythonProject ?? ""}:${String(options?.offline)}:${options?.waitForAuth ?? ""}`,
       );
     },
     async start() {
@@ -86,7 +86,7 @@ describe("CLI service command", () => {
     await program(calls, output).parseAsync(["restart"], { from: "user" });
     await program(calls, output).parseAsync(["uninstall"], { from: "user" });
 
-    assert.deepEqual(calls, ["install:false::false", "start", "stop", "restart", "uninstall"]);
+    assert.deepEqual(calls, ["install:false::false:auto", "start", "stop", "restart", "uninstall"]);
   });
 
   it("forwards a local Python project installation", async () => {
@@ -97,7 +97,17 @@ describe("CLI service command", () => {
       { from: "user" },
     );
 
-    assert.deepEqual(calls, ["install:true:packages/py/graphiti:true"]);
+    assert.deepEqual(calls, ["install:true:packages/py/graphiti:true:auto"]);
+  });
+
+  it("forwards the authentication readiness mode", async () => {
+    const calls: string[] = [];
+
+    await program(calls, []).parseAsync(["install", "--wait-for-auth", "false"], {
+      from: "user",
+    });
+
+    assert.deepEqual(calls, ["install:true::false:false"]);
   });
 
   it("writes structured status output", async () => {

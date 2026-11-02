@@ -310,7 +310,9 @@ identities into memoized sets and maps. They do not fetch documentation or
 benchmarks. `modelMetadataFor()` returns status, capabilities, normalized
 latency metadata, Arena ratings, published limits, and Databricks DBU rates per
 million input, output, cache-read, and cache-write tokens together for a string
-or `ServingEndpointSummary`. `latencyScore.score` is the benchmark's median
+or `ServingEndpointSummary`.
+
+`latencyScore.score` is the benchmark's median
 normalized response time in milliseconds, so lower values are faster.
 `latencyScore.measurements` retains median time to first token, median output
 throughput, successful run count, normalized completion length, and measurement
@@ -318,7 +320,9 @@ time. `rating.score` is a 0-100 mean percentile across the model's available
 LMArena configurations, so higher values are better even when source scales
 differ. `rating.rankings` preserves each source score, lower and upper confidence
 bounds, rank, publication date, preference votes and variance, or agent
-observation and session counts. When Arena lists multiple reasoning-effort
+observation and session counts.
+
+When Arena lists multiple reasoning-effort
 variants, each configuration keeps its highest-rated overall row. Lookups prefer
 an exact model match and otherwise inherit from the newest measured model in the
 same family and variant. Consumers can sort the root scores directly or apply

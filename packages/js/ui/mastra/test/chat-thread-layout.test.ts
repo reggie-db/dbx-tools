@@ -32,9 +32,6 @@ describe("chat thread layout", () => {
       }),
     );
 
-    assert.match(
-      html,
-      /data-slot="aui_thread-frame"[^>]*class="[^"]*min-w-0/,
-    );
+    assert.match(html, /data-slot="aui_thread-frame"[^>]*class="[^"]*min-w-0/);
   });
 });

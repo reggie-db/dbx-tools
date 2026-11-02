@@ -45,11 +45,11 @@ export function rankEndpoints(
   options: NativeRankingOptions = {},
 ): RankedModel[] {
   const defaultModelSource =
-    query.modelSource ?? (query.name === undefined && query.search === undefined ? "foundation" : undefined);
+    query.modelSource ??
+    (query.name === undefined && query.search === undefined ? "foundation" : undefined);
   const filtered = endpoints.filter(
     (endpoint) =>
-      (defaultModelSource === undefined ||
-        endpoint.modelSource === defaultModelSource) &&
+      (defaultModelSource === undefined || endpoint.modelSource === defaultModelSource) &&
       matchesModelQuery(endpoint, query),
   );
   const originalByName = new Map(filtered.map((endpoint) => [endpoint.name, endpoint]));

@@ -16,5 +16,5 @@ export type { DatabricksFileSystemClientResolver, DatabricksFileSystemOptions, D
 export { expandHomePath, normalizeDatabricksRoot, resolveDatabricksRoot, isWorkspaceFilesPath, isVolumesPath, isDbfsPath, resolveDatabricksFilesBackend } from "./src/databricks-path.ts";
 export type { DatabricksFilesBackend, NormalizeDatabricksRootOptions, ResolveDatabricksRootOptions } from "./src/databricks-path.ts";
 export { getPublicIp, resolveHostIps } from "./src/net.ts";
-export { createWorkspaceClient, refreshWorkspaceClientAuthentication, toLegacyWorkspaceClient, tryGetWorkspaceClient, getWorkspaceClient, getCurrentUserName, getWorkspaceUrl, getWorkspaceId } from "./src/workspace-client.ts";
-export type { WorkspaceClient } from "./src/workspace-client.ts";
+export { createWorkspaceClient, refreshWorkspaceClientAuthentication, toLegacyWorkspaceClient, tryGetWorkspaceClient, getWorkspaceClient, getCurrentUserName, waitForWorkspaceAuth, getWorkspaceUrl, getWorkspaceId } from "./src/workspace-client.ts";
+export type { WaitForWorkspaceAuthOptions, WorkspaceClient } from "./src/workspace-client.ts";

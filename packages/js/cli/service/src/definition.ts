@@ -15,6 +15,16 @@ import { serviceTrayIcon } from "./icon.ts";
 
 const SAFE_URL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
+/** Controls whether a service waits for its optional authentication preflight. */
+export const CliServiceWaitForAuthSchema = z
+  .enum(["auto", "true", "false"])
+  .describe(
+    "Authentication readiness mode: auto waits when the service provides an applicable auth preflight, true requires it, and false skips it.",
+  );
+
+/** Controls whether a service waits for its optional authentication preflight. */
+export type CliServiceWaitForAuth = z.infer<typeof CliServiceWaitForAuthSchema>;
+
 function isSafeUrl(value: string): boolean {
   try {
     return SAFE_URL_PROTOCOLS.has(new URL(value).protocol);
@@ -121,6 +131,10 @@ export const CliServiceDefinitionSchema = z
     pythonPackage: CliServicePythonPackageSchema.optional().describe(
       "Python runtime package installed into a service-owned uv environment.",
     ),
+    waitForAuth: CliServiceWaitForAuthSchema.optional(),
+    authCommand: CliServiceCommandSchema.optional().describe(
+      "Optional authentication preflight that must exit successfully before the managed command starts.",
+    ),
     command: CliServiceCommandSchema.optional(),
     menu: z.array(CliServiceMenuItemSchema).readonly().optional(),
   })
@@ -155,9 +169,10 @@ export function defineService(
 ): CliServiceDefinition {
   const pkg = resolveServicePackage(packageReference);
   const defaults = servicePackageDefaults(pkg);
-  const { command, ...definition } = options;
+  const { authCommand, command, ...definition } = options;
   return CliServiceDefinitionSchema.parse({
     ...definition,
+    authCommand: resolveServiceCommand(authCommand),
     command: resolveServiceCommand(command),
     packageName: pkg.name,
     id: definition.id ?? defaults.id,
@@ -165,6 +180,7 @@ export function defineService(
     version: definition.version ?? pkg.version,
     icon: definition.icon ?? serviceTrayIcon(),
     isTemplateIcon: definition.isTemplateIcon ?? process.platform === "darwin",
+    waitForAuth: definition.waitForAuth ?? "auto",
   });
 }
 

@@ -5,11 +5,7 @@ import {
   type TableProperties,
   type ZerobusStream,
 } from "@databricks/zerobus-ingest-sdk";
-import {
-  getWorkspaceUrl,
-  getWorkspaceId,
-  resolveCloudLocation,
-} from "@dbx-tools/databricks";
+import { getWorkspaceUrl, getWorkspaceId, resolveCloudLocation } from "@dbx-tools/databricks";
 import { CloudProvider } from "@dbx-tools/shared-core";
 
 /** Create a Zerobus SDK client for the active Databricks workspace. */

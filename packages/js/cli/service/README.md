@@ -91,6 +91,17 @@ any persisted disabled override, and starts the current generation through
 launchd. Concurrent service installs serialize both service replacement and
 updates to the shared runtime dependency directory.
 
+Services may provide an authentication preflight that runs before their managed
+command. The install-time `waitForAuth` mode defaults to `auto`: the owning CLI
+decides whether an applicable auth source exists, `true` requires a preflight,
+and `false` skips it. The host stays responsive to status and stop requests while
+the preflight waits.
+
+The startup entries do not supervise the host, so the host restarts a preflight
+or managed command whenever it exits on its own, waiting 1s, 2s, 5s, 10s, 30s,
+then 60s between consecutive failures. Each restart is recorded in `host.log`.
+Quitting from the tray or running `stop` ends the host without a restart.
+
 `restart` stops and starts the installed executable. It does not rebuild it.
 Re-run `install` after upgrading a consuming package to replace compiled
 executables and update the saved configuration.
@@ -140,13 +151,14 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option                     | Description                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------------- |
-| `--start`                  | Start the service after installation. (default: true)                              |
-| `--no-start`               | Disable start the service after installation.                                      |
-| `--python-project <value>` | Local Python project installed instead of the registry package.                    |
-| `--offline`                | Install Python packages from the uv cache without network access. (default: false) |
-| `--no-offline`             | Disable install python packages from the uv cache without network access.          |
+| Option                     | Description                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--start`                  | Start the service after installation. (default: true)                                                                                                                                       |
+| `--no-start`               | Disable start the service after installation.                                                                                                                                               |
+| `--python-project <value>` | Local Python project installed instead of the registry package.                                                                                                                             |
+| `--offline`                | Install Python packages from the uv cache without network access. (default: false)                                                                                                          |
+| `--no-offline`             | Disable install python packages from the uv cache without network access.                                                                                                                   |
+| `--wait-for-auth <value>`  | Authentication readiness mode: auto waits when the service provides an applicable auth preflight, true requires it, and false skips it. (choices: "auto", "true", "false", default: "auto") |
 
 ### `<cli> service start`
 

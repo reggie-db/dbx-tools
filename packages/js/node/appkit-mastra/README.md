@@ -406,7 +406,9 @@ declared under the default Assistant paths and read-only `localSkillMounts`.
 Those paths use the skill-search processor. Set `workspaceSkills: false` to
 disable workspace-file skill discovery on auto-created workspaces, or pass
 `{ topK, minScore, ttlMs }` to tune its process-cached, asynchronously refreshed
-index. Local mounts are also passed as native agent-level skills and indexed
+index.
+
+Local mounts are also passed as native agent-level skills and indexed
 once during app startup, so the standard `skill`, `skill_search`, and
 `skill_read` tools remain available without a first-turn indexing delay.
 Set `skillTools: { search: false }` to keep direct skill activation and reads
@@ -800,7 +802,7 @@ To display the chart Genie rendered rather than infer a chart locally, select
 the image renderer from the host UI:
 
 ```tsx
-<MastraChat genieSpace="sales" genieVisualization="image" />;
+<MastraChat genieSpace="sales" genieVisualization="image" />
 ```
 
 or make it the server default:

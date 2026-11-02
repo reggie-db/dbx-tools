@@ -6,6 +6,7 @@ import {
   type CliServiceCliDependencies,
   defineService,
   type CliServiceDefinition,
+  type CliServiceInstallOptions,
 } from "@dbx-tools/cli-service";
 import { serviceTrayIcon } from "@dbx-tools/cli-service";
 import { connectionUrl } from "@dbx-tools/lakebase";
@@ -19,6 +20,7 @@ import {
 } from "./options.ts";
 import { LakebaseProxy } from "./proxy.ts";
 import { PACKAGE_VERSION } from "../../index.ts";
+import { databricksServiceAuthCommand } from "../service-auth.ts";
 
 /** Injectable service boundary for Lakebase proxy CLI composition and tests. */
 export interface LakebaseProxyCliDependencies {
@@ -28,12 +30,16 @@ export interface LakebaseProxyCliDependencies {
 /** Build the tray-only Lakebase proxy service definition. */
 export function lakebaseProxyServiceDefinition(
   options: LakebaseProxyOptions = {},
+  serviceOptions: Pick<CliServiceInstallOptions, "waitForAuth"> = {},
 ): CliServiceDefinition {
   const resolved = resolveLakebaseProxyOptions(options);
+  const waitForAuth = serviceOptions.waitForAuth ?? "auto";
   return defineService(import.meta.url, {
     id: "dbx-tools.cli-lakebase-proxy",
     name: "dbx lakebase proxy",
     icon: serviceTrayIcon("lakebase"),
+    waitForAuth,
+    authCommand: databricksServiceAuthCommand(waitForAuth, resolved.profile),
     command: {
       binName: "dbx-lakebase-proxy",
       arguments: serializeArgs(resolved),
@@ -68,8 +74,11 @@ export function buildProgram(
     process.stdout.write(`${connectionUrl(target, options.listen.host, options.listen.port)}\n`);
   });
   let installCommand!: Command;
-  const serviceCommand = buildServiceCommand(() => {
-    return lakebaseProxyServiceDefinition(parseArgs(installCommand, LakebaseProxyOptionsSchema));
+  const serviceCommand = buildServiceCommand((serviceOptions) => {
+    return lakebaseProxyServiceDefinition(
+      parseArgs(installCommand, LakebaseProxyOptionsSchema),
+      serviceOptions,
+    );
   }, dependencies.service);
   installCommand = serviceCommand.commands.find((command) => command.name() === "install")!;
   addArgs(installCommand, LakebaseProxyOptionsSchema);

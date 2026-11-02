@@ -86,6 +86,9 @@ describe("normalizeModelContext", () => {
       ],
       { removeNonUsefulMessages: false },
     );
-    assert.equal(context.events.some((event) => event.text === "Useful tool result"), true);
+    assert.equal(
+      context.events.some((event) => event.text === "Useful tool result"),
+      true,
+    );
   });
 });

@@ -35,10 +35,16 @@ import { MarkdownWithEmbeds } from "./embed-slots.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
 import { CHAT_LINK_SAFETY, ToolMarkdown } from "./markdown.tsx";
+import {
+  SelectedModelPill,
+  normalizeChatMetrics,
+  type SelectedModelActivity,
+} from "./selected-model-pill.tsx";
 import { ToolSessionPill, humanizeToolName } from "./tool-pill.tsx";
 import {
   isRespondingChatStatus,
   type ApprovalDecision,
+  type ChatMetrics,
   type ChatStatus,
   type FeedbackSubmission,
   type FeedbackValue,
@@ -346,6 +352,14 @@ type AssistantBubbleProps = {
   feedbackValue?: FeedbackValue;
   /** MLflow trace link shown only to viewers with `CAN_READ` or higher. */
   mlflowTraceUrl?: string;
+  /** Selected route and usage rendered in the assistant footer. */
+  selectedModelActivity?: SelectedModelActivity;
+  /** Whether this selected route belongs to the active streaming turn. */
+  selectedModelActive?: boolean;
+  /** Show the selected model's friendly name in the assistant footer. */
+  showSelectedModel?: boolean;
+  /** Per-turn metrics pinned to the right side of the assistant footer. */
+  metrics?: ChatMetrics;
 };
 
 /** Render one assistant message with tool progress, actions, and optional feedback. */
@@ -364,6 +378,10 @@ export const AssistantBubble = ({
   feedbackRequest,
   feedbackValue,
   mlflowTraceUrl,
+  selectedModelActivity,
+  selectedModelActive = false,
+  showSelectedModel = false,
+  metrics,
 }: AssistantBubbleProps) => {
   const pendingApprovals = mergePendingApprovals(
     collectPendingApprovals(message.parts),
@@ -405,7 +423,93 @@ export const AssistantBubble = ({
   );
   const hasFooterActions =
     hasText && (isLast || Boolean(onExport) || Boolean(onFeedback) || Boolean(mlflowTraceUrl));
-  const showFooter = showResponseStatus || hasFooterActions;
+  const showTurnActivity =
+    selectedModelActivity !== undefined &&
+    (showSelectedModel || normalizeChatMetrics(metrics).length > 0);
+  const showFooter = showResponseStatus || hasFooterActions || showTurnActivity;
+  const footerActions = (
+    <>
+      {hasText && isLast && regenerate && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              onClick={() => regenerate()}
+              aria-label="Retry response"
+            >
+              <RefreshCcwIcon className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Retry</TooltipContent>
+        </Tooltip>
+      )}
+      {hasText && isLast && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              onClick={handleCopy}
+              aria-label={copied ? "Copied" : "Copy"}
+            >
+              {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
+        </Tooltip>
+      )}
+      {hasText && onExport && <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />}
+      {hasText && onFeedback && (
+        <FeedbackControls
+          onSubmit={onFeedback}
+          {...(feedbackMode ? { mode: feedbackMode } : {})}
+          {...(feedbackRequest ? { request: feedbackRequest } : {})}
+          {...(feedbackValue ? { value: feedbackValue } : {})}
+        />
+      )}
+      {hasText && mlflowTraceUrl && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button asChild type="button" size="icon" variant="ghost" className="size-7">
+              <a
+                href={mlflowTraceUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open MLflow trace"
+              >
+                <BugIcon className="size-3" />
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Open MLflow trace</TooltipContent>
+        </Tooltip>
+      )}
+      {showResponseStatus && (
+        <div className="flex items-center text-muted-foreground">
+          <AssistantResponseSpinner />
+        </div>
+      )}
+    </>
+  );
+  const footer =
+    showTurnActivity && selectedModelActivity ? (
+      <SelectedModelPill
+        activity={selectedModelActivity}
+        message={message}
+        showModel={showSelectedModel}
+        metrics={metrics}
+        active={selectedModelActive}
+      >
+        {footerActions}
+      </SelectedModelPill>
+    ) : (
+      <div className="flex min-h-7 flex-nowrap items-center gap-1">{footerActions}</div>
+    );
   // Charts and tables are placed at inline marker positions in
   // the assistant's prose. `prepare_chart` / `render_data` mint
   // a `chartId` and the model embeds `[chart:<chartId>]`; for raw
@@ -454,77 +558,7 @@ export const AssistantBubble = ({
             onResolve={onResolveToolApproval}
           />
         ))}
-        {showFooter && (
-          <div className="flex min-h-7 flex-nowrap items-center gap-1">
-            {hasText && isLast && regenerate && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    onClick={() => regenerate()}
-                    aria-label="Retry response"
-                  >
-                    <RefreshCcwIcon className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Retry</TooltipContent>
-              </Tooltip>
-            )}
-            {hasText && isLast && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    onClick={handleCopy}
-                    aria-label={copied ? "Copied" : "Copy"}
-                  >
-                    {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
-              </Tooltip>
-            )}
-            {hasText && onExport && (
-              <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />
-            )}
-            {hasText && onFeedback && (
-              <FeedbackControls
-                onSubmit={onFeedback}
-                {...(feedbackMode ? { mode: feedbackMode } : {})}
-                {...(feedbackRequest ? { request: feedbackRequest } : {})}
-                {...(feedbackValue ? { value: feedbackValue } : {})}
-              />
-            )}
-            {hasText && mlflowTraceUrl && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button asChild type="button" size="icon" variant="ghost" className="size-7">
-                    <a
-                      href={mlflowTraceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label="Open MLflow trace"
-                    >
-                      <BugIcon className="size-3" />
-                    </a>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Open MLflow trace</TooltipContent>
-              </Tooltip>
-            )}
-            {showResponseStatus && (
-              <div className="flex items-center text-muted-foreground">
-                <AssistantResponseSpinner />
-              </div>
-            )}
-          </div>
-        )}
+        {showFooter ? footer : null}
       </ItemContent>
     </Item>
   );
