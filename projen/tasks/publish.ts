@@ -16,16 +16,19 @@
  *     while the on-disk manifest keeps the protocols.) Setting each member's
  *     version first is the only prerequisite, so a sibling resolves the release
  *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
- *     inside the temporary archive, NOT in the checkout: unlike pnpm/npm, `bun
+ *     in the temporary manifest used only for packing, NOT in the checkout:
+ *     unlike pnpm/npm, `bun
  *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
  *     `exports` into the packed manifest (verified: the packed manifest keeps the
  *     raw `.ts` source paths and an inert `publishConfig`). Left unsubstituted, a
  *     published CLI's `bin` points at `./bin/x.ts`, and because the bin runs via
  *     its `#!/usr/bin/env node` shebang, node chokes on the `.ts`
- *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the top-level
- *     manifest after packing so the tarball advertises the compiled `lib/` tree;
+ *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the temporary
+ *     top-level manifest so Bun emits the compiled `lib/` entry points directly;
  *   - **compiled output** is emitted once, before packing, by one root-level
  *     filtered `bun run` that fans out to every publishable member in parallel.
+ *     Existing `lib/` trees are removed first so deleted or renamed outputs
+ *     cannot survive into a local release built from a long-lived checkout.
  *     Every package is then packed once with lifecycle scripts disabled. The
  *     exact validated archive is passed to `npm publish`, so upload never
  *     repacks or repeats a member's `prepack`. Packages retain `prepack` for
@@ -64,6 +67,7 @@ import { readNpmArchiveIdentity } from "../src/npm-release.ts";
 import { recordedPackages } from "../src/packages.ts";
 
 const logger = log.logger("projen:publish");
+const COMPILED_PUBLISH_PREFIX = "./lib/";
 
 /** Whether selected workspace members carry the reviewed workspace version. */
 function manifestsMatchVersion(members: readonly string[], version: string): boolean {
@@ -77,7 +81,7 @@ function manifestsMatchVersion(members: readonly string[], version: string): boo
 
 /** Compiled files referenced by a publishConfig entry-point tree. */
 function compiledPublishTargets(value: unknown): string[] {
-  if (typeof value === "string") return value.startsWith("./lib/") ? [value] : [];
+  if (typeof value === "string") return value.startsWith(COMPILED_PUBLISH_PREFIX) ? [value] : [];
   if (Array.isArray(value)) return value.flatMap(compiledPublishTargets);
   if (!value || typeof value !== "object") return [];
   return Object.values(value).flatMap(compiledPublishTargets);
@@ -87,6 +91,13 @@ export function compiledPublishTargetExists(dir: string, target: string): boolea
   if (!target.includes("*")) return existsSync(resolve(dir, target));
   const staticRoot = target.slice(0, target.indexOf("*")).replace(/\/+$/, "");
   return existsSync(resolve(dir, staticRoot));
+}
+
+/** Remove prior compiled output so stale files cannot enter a release archive. */
+export function clearCompiledPublishOutput(directories: readonly string[]): void {
+  for (const directory of directories) {
+    rmSync(resolve(directory, COMPILED_PUBLISH_PREFIX), { recursive: true, force: true });
+  }
 }
 
 /**
@@ -203,6 +214,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       }
       logger.info(`reusing validated compiled output for ${compiled.length} publishable packages`);
     } else {
+      clearCompiledPublishOutput(compiled.map((pkg) => pkg.dir));
       logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
       runTaskCommand(
         root,

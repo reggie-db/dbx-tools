@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { compiledPublishTargetExists } from "../tasks/publish.ts";
+import { clearCompiledPublishOutput, compiledPublishTargetExists } from "../tasks/publish.ts";
 
 let outdir: string;
 
@@ -27,5 +27,12 @@ describe("compiled publish target validation", () => {
   it("validates the compiled root for optional export wildcards", () => {
     assert.equal(compiledPublishTargetExists(outdir, "./lib/src/*/index.js"), true);
     assert.equal(compiledPublishTargetExists(outdir, "./missing/*/index.js"), false);
+  });
+
+  it("clears stale compiled output before rebuilding", () => {
+    clearCompiledPublishOutput([outdir]);
+
+    assert.equal(compiledPublishTargetExists(outdir, "./lib/index.js"), false);
+    assert.equal(compiledPublishTargetExists(outdir, "./lib/src/*/index.js"), false);
   });
 });

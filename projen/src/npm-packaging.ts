@@ -1,14 +1,5 @@
 /** Side-effect-free npm archive packing helpers. */
-import {
-  chmodSync,
-  lstatSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { spawnSync, root } from "@dbx-tools/core";
@@ -36,16 +27,7 @@ export function applyPublishConfig(
   return manifest;
 }
 
-function archiveFileEntries(directory: string, prefix = ""): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
-    return entry.isDirectory()
-      ? archiveFileEntries(join(directory, entry.name), relativePath)
-      : [relativePath];
-  });
-}
-
-/** Pack one workspace package and optionally transform only its archived manifest. */
+/** Pack one workspace package and optionally transform its temporary manifest. */
 export function packNpmPackage(
   directory: string,
   destination: string,
@@ -59,11 +41,14 @@ export function packNpmPackage(
   const workspaceManifest = JSON.parse(
     readFileSync(join(workspaceRoot, "package.json"), "utf8"),
   ) as Record<string, unknown>;
+  const materializedManifest = materializeWorkspaceManifest(
+    JSON.parse(originalManifest) as Record<string, unknown>,
+    workspaceManifest,
+  );
   const packedManifest = `${JSON.stringify(
-    materializeWorkspaceManifest(
-      JSON.parse(originalManifest) as Record<string, unknown>,
-      workspaceManifest,
-    ),
+    transformManifest
+      ? transformManifest(materializedManifest as NpmArchiveManifest)
+      : materializedManifest,
     null,
     2,
   )}\n`;
@@ -95,34 +80,5 @@ export function packNpmPackage(
   if (archives.length !== 1) {
     throw new Error(`Expected one packed npm archive, found ${archives.length}`);
   }
-  const archive = join(destination, archives[0]!);
-  if (!transformManifest) return archive;
-
-  const temp = mkdtempSync(join(tmpdir(), "projen-npm-project-"));
-  try {
-    spawnSync("tar", ["-xzf", archive, "-C", temp], {
-      cwd: process.cwd(),
-      stdout: "ignore",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    });
-    const manifestPath = join(temp, "package", "package.json");
-    const archivedManifest = JSON.parse(readFileSync(manifestPath, "utf8")) as NpmArchiveManifest;
-    writeFileSync(
-      manifestPath,
-      `${JSON.stringify(transformManifest(archivedManifest), null, 2)}\n`,
-    );
-    rmSync(archive, { force: true });
-    spawnSync("tar", ["-czf", archive, "-C", temp, ...archiveFileEntries(temp)], {
-      cwd: process.cwd(),
-      stdout: "ignore",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    });
-  } finally {
-    rmSync(temp, { recursive: true, force: true });
-  }
-  return archive;
+  return join(destination, archives[0]!);
 }
