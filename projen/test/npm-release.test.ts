@@ -59,6 +59,7 @@ before(() => {
       dependencies: { "@fixture/dependency": "workspace:*" },
     })}\n`,
   );
+  writeFileSync(join(packageDir, "index.ts"), "export const fixture = true;\n");
   const installed = spawnSync("bun", ["install", "--ignore-scripts"], {
     cwd: outdir,
     stdio: "pipe",
@@ -147,6 +148,7 @@ describe("npm release recovery", () => {
       ...value,
       transformed: true,
     }));
+    chmodSync(join(packageDir, "index.ts"), 0o444);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_100);
     const packedAgain = packNpmPackage(
       packageDir,
@@ -172,6 +174,7 @@ describe("npm release recovery", () => {
     assert.equal(packedManifest.status, 0, packedManifest.stderr);
     assert.equal(JSON.parse(packedManifest.stdout).transformed, true);
     assert.deepEqual(readFileSync(packedAgain), readFileSync(packed));
+    assert.equal(statSync(join(packageDir, "index.ts")).mode & 0o777, 0o444);
   });
 
   it("publishes an absent version", () => {
