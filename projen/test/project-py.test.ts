@@ -358,7 +358,14 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.match(instructions, /Remove duplicates so exactly one matching publisher remains/);
     assert.doesNotMatch(instructions, /PyPI project:|GitHub repository:|Workflow path:/);
-    assert.ok(project.tasks.tryFind("py:sync"));
+    assert.equal(
+      project.tasks.tryFind("py:sync")?.steps?.[0]?.exec,
+      "uv sync --all-packages --all-extras",
+    );
+    assert.deepEqual(project.tasks.tryFind("py:test")?.steps, [
+      { spawn: "py:sync" },
+      { exec: "uv run --no-sync pytest" },
+    ]);
     assert.ok(project.tasks.tryFind("py:build"));
   });
 

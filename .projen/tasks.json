@@ -512,10 +512,10 @@
     },
     "py:sync": {
       "name": "py:sync",
-      "description": "Resolve and install every Python workspace package",
+      "description": "Resolve and install every Python workspace package and optional extra",
       "steps": [
         {
-          "exec": "uv sync --all-packages"
+          "exec": "uv sync --all-packages --all-extras"
         }
       ]
     },
@@ -524,7 +524,10 @@
       "description": "Run Python workspace tests",
       "steps": [
         {
-          "exec": "uv run pytest"
+          "spawn": "py:sync"
+        },
+        {
+          "exec": "uv run --no-sync pytest"
         }
       ]
     },

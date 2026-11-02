@@ -587,14 +587,15 @@ export class DBXToolsPythonWorkspace extends Component {
 
   private addTasks(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions): void {
     const lintPaths = options.lintPaths ?? [this.repository.root];
-    project.addTask("py:sync", {
-      exec: "uv sync --all-packages",
-      description: "Resolve and install every Python workspace package",
+    const sync = project.addTask("py:sync", {
+      exec: "uv sync --all-packages --all-extras",
+      description: "Resolve and install every Python workspace package and optional extra",
     });
-    project.addTask("py:test", {
-      exec: "uv run pytest",
+    const test = project.addTask("py:test", {
       description: "Run Python workspace tests",
     });
+    test.spawn(sync);
+    test.exec("uv run --no-sync pytest");
     const lint = project.addTask("py:lint", {
       exec: `uv run ruff check ${lintPaths.join(" ")}`,
       description: "Lint Python workspace packages",
