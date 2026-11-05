@@ -69,7 +69,7 @@
   },
   "main": "server/server.ts",
   "license": "Apache-2.0",
-  "version": "0.9.196",
+  "version": "0.9.197",
   "types": "server/server.ts",
   "private": true,
   "dbxToolsConfig": {
