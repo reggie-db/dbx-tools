@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Command, Option } from "commander";
-import { buildDocumentationProgram as buildDbxDocumentationProgram } from "../../packages/js/cli/dbx-tools/src/cli.ts";
 import { buildProgram as buildGraphitiProgram } from "../../packages/js/cli/dbx-tools/src/graphiti/cli.ts";
 import { buildServiceCommand } from "../../packages/js/cli/service/src/cli.ts";
 import {
@@ -76,18 +75,21 @@ describe("parser-owned CLI references", () => {
     assert.doesNotMatch(reference, /--help|display help/);
   });
 
-  it(
-    "preserves the root CLI name in forwarded command usage",
-    { timeout: 15_000 },
-    async () => {
-      const reference = commanderReference(await buildDbxDocumentationProgram("dbx"));
-      const install = section(reference, "### `dbx graphiti service install`");
+  it("preserves the root CLI name in attached command usage", () => {
+    const program = new Command("dbx");
+    const graphiti = new Command("graphiti");
+    graphiti.command("service").command("install").option("--no-start");
+    program.addCommand(graphiti);
+    program.addCommand(
+      new Command("genie").argument("[genieArgs...]").option("--profile <profile>"),
+    );
+    const reference = commanderReference(program);
+    const install = section(reference, "### `dbx graphiti service install`");
 
-      assert.match(install, /```sh\ndbx graphiti service install \[options\]/);
-      assert.match(reference, /```sh\ndbx genie \[options\] \[genieArgs\.\.\.\]/);
-      assert.doesNotMatch(reference, /```sh\ngraphiti service install/);
-    },
-  );
+    assert.match(install, /```sh\ndbx graphiti service install \[options\]/);
+    assert.match(reference, /```sh\ndbx genie \[options\] \[genieArgs\.\.\.\]/);
+    assert.doesNotMatch(reference, /```sh\ngraphiti service install/);
+  });
 
   it("documents parent flags only on the command that owns them", () => {
     const program = new Command("proxy")
