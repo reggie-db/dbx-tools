@@ -378,6 +378,70 @@ describe("databricksWorkspace skill source identity", () => {
     await assert.doesNotReject(() => catalogue.search("jobs"));
   });
 
+  it("skips malformed skills and normalizes recoverable identifiers", async () => {
+    const source = new MemoryFileSystem({
+      id: "workspace-skill-validation",
+      root: "/skills",
+    });
+    await source.writeFile(
+      "BI_to_GenieOne/SKILL.md",
+      [
+        "---",
+        "name: BI_to_GenieOne",
+        "description: Convert BI dashboards to Genie spaces.",
+        "---",
+        "Use this skill to convert BI dashboards.",
+      ].join("\n"),
+    );
+    await source.writeFile(
+      "BI_to_GenieOne/references/checklist.md",
+      "# Checklist\n\nValidate the generated space.",
+    );
+    await source.writeFile(
+      "broken/SKILL.md",
+      [
+        "---",
+        "name: broken",
+        "description: Invalid YAML. Note: this colon is not quoted.",
+        "---",
+        "This skill should be skipped.",
+      ].join("\n"),
+    );
+    await source.writeFile(
+      "valid-skill/SKILL.md",
+      "---\nname: valid-skill\ndescription: A valid sibling skill.\n---\nKeep working.",
+    );
+    const mounts = [{ filesystem: source, mountPath: "/.skills/workspace" }];
+    const workspace = databricksWorkspace({
+      assistantPaths: false,
+      sandbox: false,
+      extraSkillMounts: mounts,
+    });
+    const catalogue = await resolveWorkspaceSkills(workspace, new RequestContext());
+
+    assert.deepEqual((await catalogue.list()).map(({ name }) => name).sort(), [
+      "bi-to-genie-one",
+      "valid-skill",
+    ]);
+    assert.equal(
+      (await catalogue.get("bi-to-genie-one"))?.instructions,
+      "Use this skill to convert BI dashboards.",
+    );
+    assert.equal(
+      await catalogue.getReference("bi-to-genie-one", "references/checklist.md"),
+      "# Checklist\n\nValidate the generated space.",
+    );
+    assert.equal(await catalogue.has("broken"), false);
+    assert.match(
+      await source.readFile("BI_to_GenieOne/SKILL.md", { encoding: "utf8" }),
+      /name: BI_to_GenieOne/,
+      "normalization must not mutate the workspace source",
+    );
+
+    const inline = await inlineSkillsFromLocalMounts(mounts);
+    assert.deepEqual(inline.map(({ name }) => name).sort(), ["bi-to-genie-one", "valid-skill"]);
+  });
+
   it("exposes local skill mounts through workspace search and native skills", async () => {
     const root = await mkdtemp(join(tmpdir(), "appkit-mastra-skills-"));
     const skill = join(root, "databricks-apps");

@@ -62,6 +62,7 @@ import {
   type WorkspaceSandboxResolver,
   type WorkspaceToolsConfig,
 } from "@mastra/core/workspace";
+import { stringify as stringifyYaml } from "yaml";
 
 import {
   MASTRA_SCOPES_KEY,
@@ -74,6 +75,7 @@ import {
   filesystems,
   MountedCompositeFilesystem,
   type MastraFileSystemAdapterOptions,
+  type SkillAliasRegistry,
 } from "./filesystems.ts";
 import { MontySandbox } from "./monty-sandbox.ts";
 import type { LocalSkillMount } from "./remote-skills.ts";
@@ -181,6 +183,8 @@ interface WorkspaceMountContribution {
   mounts: Record<string, WorkspaceFilesystem>;
   /** Paths within the composite namespace where `SKILL.md` files are scanned. */
   skillPaths?: string[];
+  /** Shared aliases visible to every composite resolved for this request. */
+  skillAliases?: SkillAliasRegistry;
 }
 
 /** Internal filesystem contribution resolver. */
@@ -847,17 +851,26 @@ export async function inlineSkillsFromLocalMounts(
     const filesystem = await inMemorySkillFilesystem(mount);
     const entries = await filesystem.readdir("/");
     for (const entry of entries) {
-      if (entry.type !== "directory" || selected.has(entry.name)) continue;
+      if (entry.type !== "directory") continue;
       const skillPath = entry.name;
       const skillFile = `${skillPath}/SKILL.md`;
       if (!(await filesystem.exists(skillFile))) continue;
       const content = await filesystem.readFile(skillFile, { encoding: "utf8" });
-      const parsed = validateSkillContent({
-        content: String(content),
-        directoryName: entry.name,
-      });
-      if (!parsed.valid || !parsed.metadata || parsed.instructions === undefined) {
-        throw new Error(`Invalid local skill ${entry.name}: ${parsed.errors.join("; ")}`);
+      const resolved = resolveSkillContent(String(content), entry.name);
+      if (!resolved.ok) {
+        logger.warn("local-skill:skipped", {
+          path: skillFile,
+          errors: resolved.errors,
+        });
+        continue;
+      }
+      if (selected.has(resolved.name)) continue;
+      if (resolved.normalized) {
+        logger.warn("local-skill:normalized", {
+          path: skillFile,
+          name: resolved.originalName,
+          normalizedName: resolved.name,
+        });
       }
       const references: Record<string, string> = {};
       for (const file of await filesystem.readdir(skillPath, { recursive: true })) {
@@ -867,16 +880,19 @@ export async function inlineSkillsFromLocalMounts(
           await filesystem.readFile(`${skillPath}/${file.name}`, { encoding: "utf8" }),
         );
       }
-      const metadata = parsed.metadata;
+      const metadata = resolved.metadata;
       selected.set(
-        entry.name,
+        resolved.name,
         createSkill({
-          name: String(metadata.name),
+          name: resolved.name,
           description: String(metadata.description),
-          instructions: parsed.instructions,
+          instructions: resolved.instructions,
           ...(typeof metadata.license === "string" ? { license: metadata.license } : {}),
           ...(metadata.compatibility !== undefined
             ? { compatibility: metadata.compatibility }
+            : {}),
+          ...(typeof metadata["user-invocable"] === "boolean"
+            ? { "user-invocable": metadata["user-invocable"] }
             : {}),
           ...(isRecord(metadata.metadata) ? { metadata: metadata.metadata } : {}),
           ...(Object.keys(references).length > 0 ? { references } : {}),
@@ -885,6 +901,90 @@ export async function inlineSkillsFromLocalMounts(
     }
   }
   return [...selected.values()];
+}
+
+type ResolvedSkillContent =
+  | {
+      ok: true;
+      name: string;
+      originalName: unknown;
+      metadata: Record<string, unknown>;
+      instructions: string;
+      content: string;
+      normalized: boolean;
+    }
+  | { ok: false; errors: string[] };
+
+/** Validate one skill and normalize failures limited to its identifier. */
+function resolveSkillContent(content: string, directoryName: string): ResolvedSkillContent {
+  const parsed = validateSkillContent({ content, directoryName });
+  if (parsed.valid && parsed.metadata && parsed.instructions !== undefined) {
+    return {
+      ok: true,
+      name: String(parsed.metadata.name),
+      originalName: parsed.metadata.name,
+      metadata: parsed.metadata as Record<string, unknown>,
+      instructions: parsed.instructions,
+      content,
+      normalized: false,
+    };
+  }
+  if (
+    !parsed.metadata ||
+    parsed.instructions === undefined ||
+    parsed.errors.some((error) => !isRecoverableSkillNameError(error))
+  ) {
+    return { ok: false, errors: parsed.errors };
+  }
+  const originalName = parsed.metadata.name;
+  const normalizedName = normalizeSkillName(
+    typeof originalName === "string" ? originalName : directoryName,
+  );
+  if (!normalizedName) return { ok: false, errors: parsed.errors };
+  const metadata = parsed.metadata as Record<string, unknown>;
+  const normalizedContent = renderSkillContent(metadata, parsed.instructions, normalizedName);
+  const normalized = validateSkillContent({
+    content: normalizedContent,
+    directoryName: normalizedName,
+  });
+  if (!normalized.valid || !normalized.metadata || normalized.instructions === undefined) {
+    return { ok: false, errors: [...parsed.errors, ...normalized.errors] };
+  }
+  return {
+    ok: true,
+    name: normalizedName,
+    originalName,
+    metadata: normalized.metadata as Record<string, unknown>,
+    instructions: normalized.instructions,
+    content: normalizedContent,
+    normalized: true,
+  };
+}
+
+function isRecoverableSkillNameError(error: string): boolean {
+  return error.startsWith("name:") || error.startsWith("Skill name ");
+}
+
+function normalizeSkillName(value: string): string {
+  return toSlug(value).slice(0, 64).replace(/-+$/, "");
+}
+
+function renderSkillContent(
+  metadata: Record<string, unknown>,
+  instructions: string,
+  name: string,
+): string {
+  const frontmatter = {
+    name,
+    description: metadata.description,
+    ...(typeof metadata.license === "string" ? { license: metadata.license } : {}),
+    ...(metadata.compatibility !== undefined ? { compatibility: metadata.compatibility } : {}),
+    ...(typeof metadata["user-invocable"] === "boolean"
+      ? { "user-invocable": metadata["user-invocable"] }
+      : {}),
+    ...(isRecord(metadata.metadata) ? { metadata: metadata.metadata } : {}),
+  };
+  return `---\n${stringifyYaml(frontmatter).trimEnd()}\n---\n\n${instructions.trim()}\n`;
 }
 
 function inMemorySkillFilesystem(mount: LocalSkillMount): Promise<FileSystem> {
@@ -1094,6 +1194,7 @@ async function resolveWorkspaceContribution(
   return {
     mounts,
     skillPaths,
+    skillAliases: new Map(),
   };
 }
 
@@ -1109,7 +1210,7 @@ async function resolveWorkspaceFilesystem(
   filesCache?: FilesCacheExports,
   sourceKey?: string,
 ): Promise<WorkspaceFilesystem> {
-  const { mounts } = await resolveContribution(context);
+  const { mounts, skillAliases } = await resolveContribution(context);
   const mountKeys = Object.keys(mounts);
   if (mountKeys.length === 0) {
     logger.debug("filesystem:empty", {
@@ -1120,7 +1221,7 @@ async function resolveWorkspaceFilesystem(
     });
   }
   logger.debug("filesystem:composite", { mountKeys });
-  const load = () => new MountedCompositeFilesystem({ mounts });
+  const load = () => new MountedCompositeFilesystem({ mounts }, skillAliases);
   if (!filesCache) return load();
   const scoped = await resolveFilesCacheScope(context);
   if (!scoped) return load();
@@ -1128,9 +1229,9 @@ async function resolveWorkspaceFilesystem(
 }
 
 /**
- * Expand configured skill paths into concrete skill directories and keep the first
- * same-named directory. Mastra still owns parsing, indexing, and refreshes,
- * while earlier configured roots retain precedence over later roots.
+ * Expand configured skill paths into validated skill directories. Malformed
+ * skills are skipped, identifier-only failures receive virtual normalized paths,
+ * and earlier configured roots retain precedence over later roots.
  */
 async function resolveDistinctSkillPaths(
   filesystem: WorkspaceFilesystem,
@@ -1141,20 +1242,50 @@ async function resolveDistinctSkillPaths(
   for (const path of paths) {
     try {
       const entries = await filesystem.readdir(path);
-      if (entries.some((entry) => entry.type === "file" && entry.name === "SKILL.md")) {
-        const name = basename(path);
-        if (!excludedSkillNames.has(name) && !selected.has(name)) selected.set(name, path);
-        continue;
-      }
-      for (const entry of entries) {
-        if (
-          entry.type !== "directory" ||
-          excludedSkillNames.has(entry.name) ||
-          selected.has(entry.name)
-        ) {
+      const candidates = entries.some((entry) => entry.type === "file" && entry.name === "SKILL.md")
+        ? [path]
+        : entries
+            .filter((entry) => entry.type === "directory")
+            .map((entry) => posixPath.join(path, entry.name));
+      for (const candidate of candidates) {
+        const skillFile = posixPath.join(candidate, "SKILL.md");
+        if (!(await filesystem.exists(skillFile))) continue;
+        const content = await filesystem.readFile(skillFile, { encoding: "utf8" });
+        const resolved = resolveSkillContent(String(content), basename(candidate));
+        if (!resolved.ok) {
+          logger.warn("workspace-skill:skipped", {
+            path: skillFile,
+            errors: resolved.errors,
+          });
           continue;
         }
-        selected.set(entry.name, posixPath.join(path, entry.name));
+        if (excludedSkillNames.has(resolved.name) || selected.has(resolved.name)) continue;
+        let selectedPath = candidate;
+        if (resolved.normalized) {
+          if (!(filesystem instanceof MountedCompositeFilesystem)) {
+            logger.warn("workspace-skill:skipped", {
+              path: skillFile,
+              errors: ["Skill identifier requires normalization on an unsupported filesystem"],
+            });
+            continue;
+          }
+          const aliasPath = posixPath.join(posixPath.dirname(candidate), resolved.name);
+          if (aliasPath !== candidate && (await filesystem.exists(aliasPath))) {
+            logger.warn("workspace-skill:skipped", {
+              path: skillFile,
+              errors: [`Normalized skill path already exists: ${aliasPath}`],
+            });
+            continue;
+          }
+          filesystem.registerSkillAlias(aliasPath, candidate, resolved.content);
+          selectedPath = aliasPath;
+          logger.warn("workspace-skill:normalized", {
+            path: skillFile,
+            name: resolved.originalName,
+            normalizedName: resolved.name,
+          });
+        }
+        selected.set(resolved.name, selectedPath);
       }
     } catch (error) {
       logger.debug("skill-path:skipped", {

@@ -10,7 +10,7 @@
  */
 
 import { scratchFS } from "@dbx-tools/fs";
-import { FileSystemError, dirname, normalize } from "@dbx-tools/shared-fs";
+import { FileSystemError, basename, dirname, normalize } from "@dbx-tools/shared-fs";
 import type {
   FileEntry as SharedFileEntry,
   FileStat as SharedFileStat,
@@ -72,6 +72,9 @@ export interface MastraFileSystemAdapterOptions extends MastraFilesystemOptions 
    */
   readOnly?: boolean;
 }
+
+/** Shared virtual skill aliases used by composite filesystems for one request. */
+export type SkillAliasRegistry = Map<string, { sourcePath: string; skillContent: string }>;
 
 /**
  * Wrap a portable {@link FileSystem} as a Mastra {@link MastraFilesystem}.
@@ -326,18 +329,91 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
  * virtual-root lookup into an unrelated mount.
  */
 export class MountedCompositeFilesystem extends CompositeFilesystem {
-  constructor(config: CompositeFilesystemConfig) {
+  private readonly skillAliases: SkillAliasRegistry;
+
+  constructor(config: CompositeFilesystemConfig, skillAliases: SkillAliasRegistry = new Map()) {
     super(config);
+    this.skillAliases = skillAliases;
+  }
+
+  /** Register a read-only virtual skill path backed by an existing source directory. */
+  registerSkillAlias(aliasPath: string, sourcePath: string, skillContent: string): void {
+    const alias = normalizeWorkspacePath(aliasPath);
+    const source = normalizeWorkspacePath(sourcePath);
+    this.skillAliases.set(alias, { sourcePath: source, skillContent });
   }
 
   override async readFile(inputPath: string, options?: ReadOptions): Promise<string | Buffer> {
+    const resolved = this.resolveSkillAlias(inputPath);
+    if (resolved?.relativePath === "SKILL.md") {
+      return options?.encoding ? resolved.skillContent : Buffer.from(resolved.skillContent, "utf8");
+    }
     if (
       (inputPath === ".gitignore" || inputPath === "/.gitignore") &&
       !this.getFilesystemForPath(inputPath)
     ) {
       return options?.encoding ? "" : Buffer.alloc(0);
     }
-    return super.readFile(inputPath, options);
+    return super.readFile(resolved?.sourcePath ?? inputPath, options);
+  }
+
+  override async readdir(inputPath: string, options?: ListOptions): Promise<FileEntry[]> {
+    const resolved = this.resolveSkillAlias(inputPath);
+    return super.readdir(resolved?.sourcePath ?? inputPath, options);
+  }
+
+  override async exists(inputPath: string): Promise<boolean> {
+    const resolved = this.resolveSkillAlias(inputPath);
+    return super.exists(resolved?.sourcePath ?? inputPath);
+  }
+
+  override async stat(inputPath: string): Promise<FileStat> {
+    const resolved = this.resolveSkillAlias(inputPath);
+    const stat = await super.stat(resolved?.sourcePath ?? inputPath);
+    if (!resolved) return stat;
+    const path = normalizeWorkspacePath(inputPath);
+    return { ...stat, name: basename(path), path };
+  }
+
+  override async isFile(inputPath: string): Promise<boolean> {
+    const resolved = this.resolveSkillAlias(inputPath);
+    return super.isFile(resolved?.sourcePath ?? inputPath);
+  }
+
+  override async isDirectory(inputPath: string): Promise<boolean> {
+    const resolved = this.resolveSkillAlias(inputPath);
+    return super.isDirectory(resolved?.sourcePath ?? inputPath);
+  }
+
+  private resolveSkillAlias(inputPath: string):
+    | {
+        sourcePath: string;
+        relativePath: string;
+        skillContent: string;
+      }
+    | undefined {
+    const path = normalizeWorkspacePath(inputPath);
+    let selected:
+      | {
+          aliasPath: string;
+          sourcePath: string;
+          skillContent: string;
+        }
+      | undefined;
+    for (const [aliasPath, alias] of this.skillAliases) {
+      if (path !== aliasPath && !path.startsWith(`${aliasPath}/`)) continue;
+      if (!selected || aliasPath.length > selected.aliasPath.length) {
+        selected = { aliasPath, ...alias };
+      }
+    }
+    if (!selected) return undefined;
+    const relativePath =
+      path === selected.aliasPath ? "" : path.slice(selected.aliasPath.length + 1);
+    return {
+      sourcePath: relativePath ? `${selected.sourcePath}/${relativePath}` : selected.sourcePath,
+      relativePath,
+      skillContent: selected.skillContent,
+    };
   }
 }
 
