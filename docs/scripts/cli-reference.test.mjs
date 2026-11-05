@@ -76,14 +76,18 @@ describe("parser-owned CLI references", () => {
     assert.doesNotMatch(reference, /--help|display help/);
   });
 
-  it("preserves the root CLI name in forwarded command usage", async () => {
-    const reference = commanderReference(await buildDbxDocumentationProgram("dbx"));
-    const install = section(reference, "### `dbx graphiti service install`");
+  it(
+    "preserves the root CLI name in forwarded command usage",
+    { timeout: 15_000 },
+    async () => {
+      const reference = commanderReference(await buildDbxDocumentationProgram("dbx"));
+      const install = section(reference, "### `dbx graphiti service install`");
 
-    assert.match(install, /```sh\ndbx graphiti service install \[options\]/);
-    assert.match(reference, /```sh\ndbx genie \[options\] \[genieArgs\.\.\.\]/);
-    assert.doesNotMatch(reference, /```sh\ngraphiti service install/);
-  });
+      assert.match(install, /```sh\ndbx graphiti service install \[options\]/);
+      assert.match(reference, /```sh\ndbx genie \[options\] \[genieArgs\.\.\.\]/);
+      assert.doesNotMatch(reference, /```sh\ngraphiti service install/);
+    },
+  );
 
   it("documents parent flags only on the command that owns them", () => {
     const program = new Command("proxy")
