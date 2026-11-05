@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.199";
+export const PACKAGE_VERSION = "0.9.200";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -52,7 +52,7 @@ export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
 export { resolveFeedbackModes } from "./src/feedback-mode.ts";
 export type { FeedbackAvailability } from "./src/feedback-mode.ts";
 export { filesystems, MastraFileSystemAdapter, MountedCompositeFilesystem, scratchFilesystem } from "./src/filesystems.ts";
-export type { MastraFileSystemAdapterOptions } from "./src/filesystems.ts";
+export type { MastraFileSystemAdapterOptions, SkillAliasRegistry } from "./src/filesystems.ts";
 export { FOLLOW_UP_USER_TEXT_KEY, FOLLOW_UP_NATIVE_QUESTIONS_KEY, FOLLOW_UP_RUN_ID_KEY, resolveFollowUpSuggestionsConfig, suggestQuestions, suggestFollowUps, buildFollowUpSuggestionsProcessor, buildFollowUpSuggestionsTransform, buildSuggestFollowUpsTool } from "./src/follow-up-suggestions.ts";
 export type { ResolvedFollowUpSuggestionsConfig, SuggestFollowUpsOptions, SuggestQuestionsOptions, FollowUpSuggester } from "./src/follow-up-suggestions.ts";
 export { genieAnswerText, visibleGenieQuestion, visibleGenieThreadTitle, genieMessageToUiMessages, listGenieThreads, listGenieThreadMessages, genieChatStream, deleteGenieThread, deleteGenieThreadMessage } from "./src/genie-chat.ts";
