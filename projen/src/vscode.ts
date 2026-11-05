@@ -38,7 +38,7 @@ class EditableVsCodeSettings extends Component {
     this.file.readonly = false;
   }
 
-  preSynthesize(): void {
+  override preSynthesize(): void {
     if (!existsSync(this.file.absolutePath)) return;
     for (const [key, value] of Object.entries(existingSettings(this.file.absolutePath))) {
       if (key === PROJEN_JSON_MARKER) continue;
