@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  nativeSearchRequest,
   parseSearchClientConfig,
   parseUniversalSearchResult,
   usesUniversalSearchRoute,
@@ -76,5 +77,19 @@ describe("parseSearchClientConfig", () => {
 
   it("rejects malformed published config", () => {
     expect(() => parseSearchClientConfig({ indexes: [], pageSize: "ten" })).toThrow();
+  });
+});
+
+describe("nativeSearchRequest", () => {
+  it("passes attribute filters to the native single-index request", () => {
+    expect(nativeSearchRequest("fuel", { limit: 12, filters: { runId: "run-1" } })).toEqual({
+      queryText: "fuel",
+      numResults: 12,
+      filters: { runId: "run-1" },
+    });
+  });
+
+  it("omits empty filters", () => {
+    expect(nativeSearchRequest("fuel", { filters: {} })).toEqual({ queryText: "fuel" });
   });
 });

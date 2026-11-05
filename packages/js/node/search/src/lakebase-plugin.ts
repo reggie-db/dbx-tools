@@ -214,6 +214,22 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     );
   }
 
+  /**
+   * Delete documents by primary key from one configured Lakebase full-text index.
+   *
+   * In-process only: no HTTP route is mounted for it. Gated by `allowWrite` like
+   * {@link addDocuments}, so an app that rebuilds an index can remove what the
+   * rebuild no longer produces instead of leaving stale rows searchable.
+   */
+  async deleteDocuments(alias: string, ids: Array<string | number>) {
+    if (!this.config.allowWrite) {
+      throw new ValidationError("Lakebase AI Search writes are disabled");
+    }
+    const index = this.resolveIndex(alias);
+    if (ids.length === 0) return { index: index.indexName, count: 0 };
+    return this.requireBackend(index).deleteDocuments(index.indexName, ids);
+  }
+
   override clientConfig() {
     return {
       indexes: this.indexes().map((index) => ({
@@ -229,6 +245,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
       providerKind: "lakebase" as const,
       query: this.query.bind(this),
       addDocuments: this.addDocuments.bind(this),
+      deleteDocuments: this.deleteDocuments.bind(this),
     };
   }
 

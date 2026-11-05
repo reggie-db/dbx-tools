@@ -33,7 +33,15 @@ export interface UseSearchOptions {
   debounceMs?: number;
   /** Minimum query length before searching. Defaults to 1. */
   minLength?: number;
+  /**
+   * Attribute filters applied by the provider, as `{ column: scalarOrArray }`, combined with
+   * AND. Single-index queries only; the universal route has no filter contract.
+   */
+  filters?: SearchFilters;
 }
+
+/** Attribute filters accepted by AppKit AI Search single-index queries. */
+export type SearchFilters = NonNullable<AiSearchRequest["filters"]>;
 
 /** The state {@link useSearch} returns. */
 export interface UseSearchState {
@@ -71,6 +79,22 @@ export function parseSearchClientConfig(value: unknown): SearchClientConfig | un
     return undefined;
   }
   return searchClientConfigSchema.parse(value);
+}
+
+/** The native single-index request for one query, with optional mode, limit, and filters. */
+export function nativeSearchRequest(
+  text: string,
+  options: Pick<UseSearchOptions, "mode" | "limit" | "filters">,
+): AiSearchRequest {
+  const resolvedQueryType = toAiSearchQueryType(options.mode);
+  return {
+    queryText: text,
+    ...(options.limit ? { numResults: options.limit } : {}),
+    ...(resolvedQueryType ? { queryType: resolvedQueryType } : {}),
+    ...(options.filters && Object.keys(options.filters).length > 0
+      ? { filters: options.filters }
+      : {}),
+  };
 }
 
 /** A single configured index is already the complete universal-search set. */
@@ -113,6 +137,9 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
     SEARCH_ROUTES.universal,
   );
 
+  // Callers usually pass a fresh object literal each render; key on its contents so the
+  // search callback, and with it the debounce, is not rebuilt on every render.
+  const filterKey = JSON.stringify(options.filters ?? {});
   const [query, setQueryState] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [universalLoading, setUniversalLoading] = useState(false);
@@ -130,13 +157,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         return;
       }
       if (!useUniversalRoute) {
-        const resolvedQueryType = toAiSearchQueryType(options.mode);
-        const request: AiSearchRequest = {
-          queryText: text,
-          ...(options.limit ? { numResults: options.limit } : {}),
-          ...(resolvedQueryType ? { queryType: resolvedQueryType } : {}),
-        };
-        const result = await native.search(request);
+        const result = await native.search(nativeSearchRequest(text, options));
         setHits(result ? toHits(result.results, native.alias) : []);
         return;
       }
@@ -172,6 +193,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
       minLength,
       native.alias,
       native.search,
+      filterKey,
       options.limit,
       options.mode,
       universalSearchPath,

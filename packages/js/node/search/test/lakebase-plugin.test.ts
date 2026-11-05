@@ -11,6 +11,7 @@ import { LakebaseAiSearchPlugin, type LakebaseAiSearchConfig } from "../src/lake
 function plugin(config: LakebaseAiSearchConfig) {
   const instance = new LakebaseAiSearchPlugin(config);
   const writes: unknown[][] = [];
+  const deletes: Array<Array<string | number>> = [];
   const backend = {
     async search() {
       return {
@@ -28,12 +29,16 @@ function plugin(config: LakebaseAiSearchConfig) {
       writes.push(documents);
       return { index: "docs", count: documents.length };
     },
+    async deleteDocuments(_index: string, ids: Array<string | number>) {
+      deletes.push(ids);
+      return { index: "docs", count: ids.length };
+    },
   };
   Object.assign(instance, {
     servicePrincipalBackend: backend,
     userBackend: backend,
   });
-  return { instance, writes };
+  return { instance, writes, deletes };
 }
 
 function responseJson(response: ReturnType<typeof createMockResponse>): unknown {
@@ -138,5 +143,32 @@ describe("Lakebase AI Search HTTP policy", () => {
     } as unknown as LakebaseAiSearchConfig);
 
     await assert.rejects(instance.setup(), /Unknown AI Search auth mode/);
+  });
+});
+
+describe("Lakebase AI Search in-process deletes", () => {
+  it("deletes documents by id when writes are allowed", async () => {
+    const { instance, deletes } = plugin({ indexes: { docs: {} }, allowWrite: true });
+
+    const result = await instance.exports().deleteDocuments("docs", ["a", 2]);
+
+    assert.deepEqual(deletes, [["a", 2]]);
+    assert.equal(result.count, 2);
+  });
+
+  it("skips the backend for an empty id list", async () => {
+    const { instance, deletes } = plugin({ indexes: { docs: {} }, allowWrite: true });
+
+    const result = await instance.exports().deleteDocuments("docs", []);
+
+    assert.deepEqual(deletes, []);
+    assert.equal(result.count, 0);
+  });
+
+  it("refuses deletes when writes are disabled", async () => {
+    const { instance, deletes } = plugin({ indexes: { docs: {} } });
+
+    await assert.rejects(() => instance.exports().deleteDocuments("docs", ["a"]), /writes are disabled/);
+    assert.deepEqual(deletes, []);
   });
 });

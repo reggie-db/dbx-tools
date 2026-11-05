@@ -13,6 +13,7 @@ date and final status.
 ## Active plans
 
 - [Support service-principal MLflow feedback in Databricks Apps](2026-10-08-apps-feedback-service-principal-client.md)
+- [Search filters, document deletes, and a separate model workspace](2026-11-05-search-filters-deletes-and-model-workspace.md)
 
 ## Cross-repository suggestions
 
