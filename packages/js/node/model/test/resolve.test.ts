@@ -13,6 +13,9 @@ import {
   type WorkspaceClientLike,
 } from "../src/model-catalog.ts";
 import { selectModel } from "../src/resolve.ts";
+import {
+  modelStatusFor,
+} from "../src/retirement.ts";
 import { lookupModels, resolveModel } from "../src/selection.ts";
 
 const CHAT_TASK = "llm/v1/chat";
@@ -115,6 +118,21 @@ describe("searchServingEndpoints / resolveModelId", () => {
     const result = resolveModelId("zzz-no-such-model", endpoints);
     assert.equal(result.matched, false);
     assert.equal(result.modelId, "zzz-no-such-model");
+  });
+
+  it("keeps later point releases selectable when an earlier release is retired", () => {
+    assert.equal(modelStatusFor("databricks-claude-sonnet-4").deprecated, true);
+    assert.equal(modelStatusFor("databricks-claude-sonnet-4-5").deprecated, false);
+    assert.equal(modelStatusFor("databricks-meta-llama-2-70b-chat").deprecated, true);
+    assert.equal(modelStatusFor("claude-sonnet-4-20250514").deprecated, true);
+    assert.equal(modelStatusFor("claude-sonnet-4-2025-05-14").deprecated, true);
+    assert.deepEqual(
+      resolveModel(
+        [chat("databricks-claude-sonnet-4"), chat("databricks-claude-sonnet-4-5")],
+        { explicit: "claude sonnet 4 5" },
+      ),
+      { modelId: "databricks-claude-sonnet-4-5", source: "fuzzy-match" },
+    );
   });
 
   it("returns [] for an empty catalogue", () => {
@@ -784,6 +802,11 @@ describe("resolveModel", () => {
   it("returns an explicit name verbatim when fuzzy is off", () => {
     const result = resolveModel(TIERED, { explicit: "my-pinned-model", fuzzy: false });
     assert.deepEqual(result, { modelId: "my-pinned-model", source: "explicit" });
+  });
+
+  it("reports an unmatched explicit name instead of a fuzzy match", () => {
+    const result = resolveModel(TIERED, { explicit: "zzz-no-such-model" });
+    assert.deepEqual(result, { modelId: "zzz-no-such-model", source: "unmatched" });
   });
 
   it("resolves a class ask to the top of that band and below", () => {

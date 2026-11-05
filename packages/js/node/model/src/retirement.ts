@@ -45,7 +45,7 @@ export function modelStatusFor(
     .some((identity) => {
       const candidate = retiredModelKey(identity);
       for (const key of keys) {
-        if (candidate === key || candidate.startsWith(`${key}-`)) return true;
+        if (matchesRetiredModelKey(candidate, key)) return true;
       }
       return false;
     });
@@ -70,4 +70,24 @@ function retiredModelKey(value: string): string {
   const tokens = value.toLowerCase().match(/[a-z0-9]+/g) ?? [];
   while (tokens[0] && RETIRED_MODEL_PREFIXES.has(tokens[0])) tokens.shift();
   return tokens.join("-");
+}
+
+function matchesRetiredModelKey(candidate: string, retired: string): boolean {
+  if (candidate === retired) return true;
+  if (!candidate.startsWith(`${retired}-`)) return false;
+  const suffix = candidate.slice(retired.length + 1).split("-");
+  return isReleaseDateSuffix(suffix) || !isVersionComponent(suffix[0]);
+}
+
+function isReleaseDateSuffix(tokens: readonly string[]): boolean {
+  const [first, second, third] = tokens;
+  if (first && /^(?:19|20)\d{6}$/.test(first)) return true;
+  if (!first || !second || !third || !/^(?:19|20)\d{2}$/.test(first)) return false;
+  const month = Number(second);
+  const day = Number(third);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+function isVersionComponent(token: string | undefined): boolean {
+  return token !== undefined && (/^\d+$/.test(token) || /^v\d+$/.test(token));
 }

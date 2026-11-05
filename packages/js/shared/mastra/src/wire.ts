@@ -36,7 +36,11 @@ import {
   type MessageStatus,
   GenieChatEventSchema,
 } from "@dbx-tools/shared-genie";
-import { ModelTokenPriceSchema, ServingEndpointSummarySchema } from "@dbx-tools/shared-model";
+import {
+  ModelTokenPriceSchema,
+  ResolvedModelSelectionSchema,
+  ServingEndpointSummarySchema,
+} from "@dbx-tools/shared-model";
 import {
   AiDecideObservationSchema,
   SmartRouterObservationSchema,
@@ -604,8 +608,8 @@ export const ModelRoutePartDataSchema = z
   .object({
     runId: z.string().optional().describe("Mastra run id using this model route."),
     model: z.string().trim().min(1).describe("Concrete serving endpoint selected for the turn."),
-    selection: z
-      .enum(["smart-router", "ai-decide", "explicit", "fuzzy-match", "class", "fallback"])
+    selection: ResolvedModelSelectionSchema.shape.source
+      .or(z.enum(["smart-router", "ai-decide"]))
       .describe("Policy branch that selected the concrete model."),
     smartRouter: SmartRouterObservationSchema.optional().describe(
       "Smart Router decision details when the virtual model selected the endpoint.",

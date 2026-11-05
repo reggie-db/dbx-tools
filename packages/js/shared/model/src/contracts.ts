@@ -539,7 +539,7 @@ export const ResolvedModelSelectionSchema = z
   .object({
     modelId: z.string().describe("Selected serving endpoint identifier."),
     source: z
-      .enum(["explicit", "fuzzy-match", "class", "fallback"])
+      .enum(["explicit", "fuzzy-match", "unmatched", "class", "fallback"])
       .describe("Policy branch that selected this model."),
   })
   .describe("Selected model identifier and the policy branch that selected it.");

@@ -235,7 +235,7 @@ describe("browser-safe model schemas", () => {
       }).fallbacks,
       ["databricks-grok-4-7"],
     );
-    for (const source of ["explicit", "fuzzy-match", "class", "fallback"]) {
+    for (const source of ["explicit", "fuzzy-match", "unmatched", "class", "fallback"]) {
       assert.doesNotThrow(() => ResolvedModelSelectionSchema.parse({ modelId: "model", source }));
     }
   });

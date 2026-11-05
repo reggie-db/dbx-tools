@@ -194,7 +194,7 @@ class DefaultModelClient implements ModelClient {
     let resolved = resolveModel(catalogue, effectiveSelection, {
       preferSystemModels: this.preferSystemModels,
     });
-    if (isUnmatchedExplicit(catalogue, effectiveSelection, resolved)) {
+    if (resolved.source === "unmatched") {
       resolved = resolveModel(await this.catalogue(true), effectiveSelection, {
         preferSystemModels: this.preferSystemModels,
       });
@@ -382,19 +382,6 @@ function routeUrl(host: string, modelId: string, protocol: ModelProtocol): strin
     return chatCompletionsUrl(host);
   }
   return invocationsUrl(host, modelId);
-}
-
-function isUnmatchedExplicit(
-  catalogue: readonly ServingEndpointSummary[],
-  input: ResolveModelInput,
-  resolved: ResolvedModelSelection,
-): boolean {
-  return (
-    input.explicit !== undefined &&
-    input.fuzzy !== false &&
-    resolved.modelId === input.explicit &&
-    !catalogue.some((endpoint) => endpoint.name === input.explicit)
-  );
 }
 
 function cloneEndpoints(endpoints: readonly ServingEndpointSummary[]): ServingEndpointSummary[] {

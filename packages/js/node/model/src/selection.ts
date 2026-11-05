@@ -70,7 +70,9 @@ export function resolveModel(
     if (input.requiresTools && !top) {
       throw new Error(`No tool-capable model matches "${input.explicit}"`);
     }
-    return { modelId: top?.endpoint.name ?? input.explicit, source: "fuzzy-match" };
+    return top
+      ? { modelId: top.endpoint.name, source: "fuzzy-match" }
+      : { modelId: input.explicit, source: "unmatched" };
   }
 
   if (input.modelClass === undefined && input.fallbacks && input.fallbacks.length > 0) {

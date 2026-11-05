@@ -13,6 +13,7 @@
 
 import { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "@dbx-tools/model";
 import { firstNonEmpty } from "@dbx-tools/shared-core";
+import type { ResolvedModelSelection } from "@dbx-tools/shared-model";
 import {
   MODEL_OVERRIDE_HEADER,
   MODEL_OVERRIDE_QUERY,
@@ -51,7 +52,7 @@ export interface MastraModelRoute {
   /** Concrete serving endpoint selected for the turn. */
   model: string;
   /** Policy branch that selected the concrete endpoint. */
-  selection: "smart-router" | "ai-decide" | "explicit" | "fuzzy-match" | "class" | "fallback";
+  selection: "smart-router" | "ai-decide" | ResolvedModelSelection["source"];
   /** Full Smart Router decision when the virtual model selected the endpoint. */
   smartRouter?: SmartRouterObservation;
   /** Full ai_decide decision when that virtual model selected the endpoint. */

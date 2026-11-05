@@ -1,6 +1,6 @@
 # Retired model prefix matching excludes active later versions
 
-Status: Open
+Status: Fixed in v0.9.201
 
 ## Summary
 
@@ -103,3 +103,10 @@ Serving endpoint ID.
 - A loose `claude sonnet 4 5` request resolves to the ready Sonnet 4.5 endpoint.
 - A dated alias of an actually retired model remains deprecated.
 - An unmatched loose request does not report `source: "fuzzy-match"`.
+
+## Resolution
+
+Retirement matching now treats an added numeric version component as a distinct
+model release while preserving retirement inheritance for aliases and dated
+provider identities. Unresolved fuzzy selections now report
+`source: "unmatched"`.
