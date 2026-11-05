@@ -136,6 +136,11 @@
       "type": "runtime"
     },
     {
+      "name": "clean-stack",
+      "version": "^3.0.1",
+      "type": "runtime"
+    },
+    {
       "name": "commander",
       "version": "catalog:",
       "type": "runtime"

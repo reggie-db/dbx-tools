@@ -50,6 +50,7 @@ import {
   spawnSync as nodeSpawnSync,
 } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
 import { text } from "node:stream/consumers";
@@ -968,17 +969,17 @@ function waitForExit(proc: ChildProcess): Promise<number> {
 /**
  * Build an `Error` for a non-zero exit when {@link ExecOptions.check} is set.
  *
- * Prefers trimmed stderr text, then stdout, in the message body.
+ * Names only the executable in the summary and prefers trimmed stderr text,
+ * then stdout, on following lines.
  *
  * @param command - Executable name or path
- * @param args - Arguments passed to the executable
  * @param result - Completed exec outcome with captured output
  * @returns Error suitable for throwing from {@link spawn}
  */
-function execError(command: string, args: string[], result: ExecResult): Error {
+function execError(command: string, result: ExecResult): Error {
   const detail = result.stderr || result.stdout;
   return new Error(
-    `${commandLabel(command, args)} failed (exit ${result.exitCode})${detail ? `: ${detail}` : ""}`,
+    `${basename(command) || command} failed (exit ${result.exitCode})${detail ? `:\n${detail}` : ""}`,
   );
 }
 
@@ -1176,7 +1177,7 @@ export function spawn(...args: SpawnArgs<ExecOptions>): ChildProcessResult {
 
       const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
       if (check && result.exitCode !== 0) {
-        const err = execError(command, commandArgs, result);
+        const err = execError(command, result);
         if (commandNotFoundError) err.cause = commandNotFoundError;
         throw err;
       }
@@ -1261,12 +1262,12 @@ export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
   const execResult = createSyncExecResult(exitCode, stdoutText, stderrText, trim);
 
   if (result.error && (!commandNotFound || check)) {
-    const err = execError(command, commandArgs, execResult);
+    const err = execError(command, execResult);
     err.cause = result.error;
     throw err;
   }
 
-  if (check && execResult.exitCode !== 0) throw execError(command, commandArgs, execResult);
+  if (check && execResult.exitCode !== 0) throw execError(command, execResult);
   return execResult;
 }
 

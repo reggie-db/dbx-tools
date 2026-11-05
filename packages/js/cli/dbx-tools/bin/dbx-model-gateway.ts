@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { runCliMain } from "../src/_cli-main.ts";
 import { buildProgram } from "../src/model-gateway/cli.ts";
 
-await buildProgram("dbx-model-gateway").parseAsync(process.argv);
+await runCliMain(() => buildProgram("dbx-model-gateway").parseAsync(process.argv));

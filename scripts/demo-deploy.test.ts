@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "bun:test";
 import { parseArgv } from "@dbx-tools/cli-args";
-import { DemoDeployOptionsSchema } from "./demo-deploy.ts";
+import { DEMO_AGENT_STORAGE_SCHEMAS, DemoDeployOptionsSchema } from "./demo-deploy.ts";
 
 describe("demo deploy options", () => {
   it("validates by default", () => {
@@ -10,5 +10,9 @@ describe("demo deploy options", () => {
 
   it("accepts the common no-validation switch", () => {
     assert.equal(parseArgv(DemoDeployOptionsSchema, ["--no-validation"]).validation, false);
+  });
+
+  it("derives Lakebase schemas from the registered demo agent ids", () => {
+    assert.deepEqual(DEMO_AGENT_STORAGE_SCHEMAS, ["mastra_support", "mastra_models"]);
   });
 });

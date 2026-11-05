@@ -1214,6 +1214,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-model-gateway@workspace:*",
     "@dbx-tools/tunnel@workspace:*",
     "concurrently@catalog:",
+    "clean-stack@^3.0.1",
     "get-port@^7.1.0",
     "http-proxy-3@catalog:",
     "pg@catalog:",

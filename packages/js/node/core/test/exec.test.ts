@@ -3,7 +3,7 @@ import { spawn as nativeSpawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, it } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { exec } from "../index.ts";
@@ -177,6 +177,30 @@ describe("missing executable", () => {
     assert.throws(
       () => exec.spawnSync(MISSING_COMMAND, [], { ...QUIET_STDIO, check: true }),
       /failed \(exit 127\)/,
+    );
+  });
+});
+
+describe("checked failures", () => {
+  it("leads with the executable and captured stderr", async () => {
+    await assert.rejects(
+      exec.spawn(
+        process.execPath,
+        ["-e", "process.stderr.write('visible failure'); process.exit(3)"],
+        {
+          stdin: "ignore",
+          stdout: "capture",
+          stderr: "capture",
+          check: true,
+        },
+      ),
+      (error: Error) => {
+        assert.equal(
+          error.message,
+          `${basename(process.execPath)} failed (exit 3):\nvisible failure`,
+        );
+        return true;
+      },
     );
   });
 });

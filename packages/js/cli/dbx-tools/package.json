@@ -56,6 +56,7 @@
     "@dbx-tools/shared-graphiti": "workspace:*",
     "@dbx-tools/shared-model-gateway": "workspace:*",
     "@dbx-tools/tunnel": "workspace:*",
+    "clean-stack": "^3.0.1",
     "commander": "catalog:",
     "concurrently": "catalog:",
     "get-port": "^7.1.0",

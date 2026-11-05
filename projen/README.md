@@ -121,6 +121,13 @@ without repeating repository coordinates. Pass `repository`, `name`, or
 VS Code component. dbx-tools reuses it rather than constructing a second
 `.vscode/settings.json` owner.
 
+The generated `.vscode/settings.json` is writable. During Projen's
+`preSynthesize` phase, dbx-tools parses the existing JSON-with-comments file and
+applies its settings through Projen's native `ObjectFile.addOverride()` API.
+Existing values and local settings therefore survive synthesis, while generated
+settings that are absent from the file are restored. Projen rewrites the file as
+normalized JSON, so comments and formatting are not retained.
+
 ### Bundle Node code for PythonMonkey
 
 Add `nodeBindings` to any `DBXToolsPythonWorkspace` package to generate

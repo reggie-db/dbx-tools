@@ -29,6 +29,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 import { busDemo } from "./bus-demo.ts";
+import { DEMO_AGENT_IDS } from "../shared/agent-ids.ts";
 
 /**
  * Drop one-line HTTP access logs (`[16:50:31] GET /path → 200`).
@@ -447,8 +448,11 @@ await createApp({
       // Prefer native Genie questions when available. Agent Mode currently emits
       // none, so ChatFast generates grounded fallback questions after the answer.
       followUpSuggestions: true,
-      agents: { support, models: modelComparison },
-      defaultAgent: "support",
+      agents: {
+        [DEMO_AGENT_IDS.support]: support,
+        [DEMO_AGENT_IDS.models]: modelComparison,
+      },
+      defaultAgent: DEMO_AGENT_IDS.support,
       genieAgentMode: true,
       workspaceFallbackToTmp: true,
       // Chat runs on-behalf-of the signed-in user by default, so the caller must

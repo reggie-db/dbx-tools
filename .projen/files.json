@@ -13,7 +13,6 @@
     ".projen/tasks.json",
     ".slopconfig.yaml",
     ".vscode/extensions.json",
-    ".vscode/settings.json",
     ".vscode/tasks.json",
     "bunfig.toml",
     "LICENSE",

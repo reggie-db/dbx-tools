@@ -3,12 +3,21 @@
 /** Deploy the demo through the Projen-owned AppKit deployment task. */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  applyLakebaseProvisionTargets,
+  resolveLakebaseProvisionTargets,
+} from "@dbx-tools/appkit";
+import { agentStorageSchemaName } from "@dbx-tools/appkit-mastra";
 import { createAuthClient } from "@dbx-tools/auth";
 import { parseArgv } from "@dbx-tools/cli-args";
 import { spawn } from "@dbx-tools/core";
+import { LakebaseClient, parseAddress } from "@dbx-tools/lakebase";
 import { log, toError } from "@dbx-tools/shared-core";
+import { Client } from "pg";
 import { parse } from "yaml";
 import { z } from "zod";
+
+import { DEMO_AGENT_IDS } from "../packages/demo/shared/agent-ids.ts";
 
 const logger = log.logger("demo:deploy");
 const ROOT = process.cwd();
@@ -23,12 +32,17 @@ const BundleConfigSchema = z.object({
   variables: z.object({
     app_name: z.object({ default: z.string() }),
     generator_catalog: z.object({ default: z.string() }),
+    lakebase_project_id: z.object({ default: z.string() }),
   }),
 });
 
 const AppResponseSchema = z.object({
   service_principal_client_id: z.string().uuid(),
 });
+
+export const DEMO_AGENT_STORAGE_SCHEMAS = Object.values(DEMO_AGENT_IDS).map(
+  agentStorageSchemaName,
+);
 
 export const DemoDeployOptionsSchema = z.object({
   profile: z
@@ -87,19 +101,25 @@ async function runOutput(command: string[], cwd: string): Promise<string> {
   return result.stdout;
 }
 
-async function grantGeneratorCatalog(
+async function appServicePrincipalClientId(
   appName: string,
-  generatorCatalog: string,
   selection: string[],
-): Promise<void> {
-  const app = AppResponseSchema.parse(
+): Promise<string> {
+  return AppResponseSchema.parse(
     JSON.parse(
       await runOutput(
         ["databricks", "apps", "get", appName, "--output", "json", ...selection],
         APP_DIR,
       ),
     ),
-  );
+  ).service_principal_client_id;
+}
+
+async function grantGeneratorCatalog(
+  servicePrincipalClientId: string,
+  generatorCatalog: string,
+  selection: string[],
+): Promise<void> {
   await run(
     [
       "databricks",
@@ -111,7 +131,7 @@ async function grantGeneratorCatalog(
       JSON.stringify({
         changes: [
           {
-            principal: app.service_principal_client_id,
+            principal: servicePrincipalClientId,
             add: ["USE_CATALOG", "CREATE_SCHEMA"],
           },
         ],
@@ -120,6 +140,35 @@ async function grantGeneratorCatalog(
     ],
     APP_DIR,
   );
+}
+
+async function grantLakebaseSchemas(
+  servicePrincipalClientId: string,
+  target: string,
+  profile: string | undefined,
+): Promise<void> {
+  const lakebase = new LakebaseClient(profile ? { profile } : {});
+  const resolved = await lakebase.resolve(parseAddress(target));
+  const password = await lakebase.generateDatabaseCredential(resolved.endpoint);
+  const client = new Client({
+    host: resolved.host,
+    port: resolved.port,
+    database: resolved.database,
+    user: resolved.user,
+    password,
+    ssl: { rejectUnauthorized: true },
+  });
+  try {
+    await client.connect();
+    await applyLakebaseProvisionTargets(
+      client,
+      servicePrincipalClientId,
+      resolveLakebaseProvisionTargets(DEMO_AGENT_STORAGE_SCHEMAS),
+      logger,
+    );
+  } finally {
+    await client.end().catch(() => {});
+  }
 }
 
 export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
@@ -143,10 +192,19 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     ],
     ROOT,
   );
-  await grantGeneratorCatalog(
+  const servicePrincipalClientId = await appServicePrincipalClientId(
     config.variables.app_name.default,
+    selection,
+  );
+  await grantGeneratorCatalog(
+    servicePrincipalClientId,
     config.variables.generator_catalog.default,
     selection,
+  );
+  await grantLakebaseSchemas(
+    servicePrincipalClientId,
+    config.variables.lakebase_project_id.default,
+    client.profile,
   );
   logger.info("demo app deployed", { profile: client.profile, target });
 }

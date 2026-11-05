@@ -14,6 +14,9 @@ bun add --global @dbx-tools/cli
 profile are resolved automatically. Examples that use `MY-PROFILE` show an
 explicit override.
 
+Operational failures print a concise message without an internal stack trace.
+Set `LOG_LEVEL=debug` when rerunning a command to include a cleaned stack trace.
+
 ## Export a brand package
 
 ```sh
