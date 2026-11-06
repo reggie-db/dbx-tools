@@ -83,12 +83,13 @@ The package:
   the operating system's application-data directory. Both adapters run Better
   Auth's own migrations under a Postgres advisory lock or file lock.
 - Email OTP remains bootstrap and recovery. Returning users can authenticate
-  with discoverable passkeys. The OTP form can create a passkey immediately
-  after verification, and users can enroll, name, or remove more passkeys
-  through [@dbx-tools/ui/auth](../../ui/appkit). Each passkey uses the exact
-  public tunnel hostname as its WebAuthn relying-party ID. Its display name
-  combines `TUNNEL_AUTH_PASSKEY_NAME_PREFIX` with the humanized first hostname
-  label; the prefix defaults to `projectUtils.name()`.
+  with discoverable passkeys when `TUNNEL_AUTH_PASSKEYS` is enabled. Set it to
+  `false` or pass `--no-passkeys` to keep the gate email-only. The OTP form can
+  create a passkey immediately after verification, and users can enroll, name,
+  or remove more passkeys through [@dbx-tools/ui/auth](../../ui/appkit). Each
+  passkey uses the exact public tunnel hostname as its WebAuthn relying-party
+  ID. Its display name combines `TUNNEL_AUTH_PASSKEY_NAME_PREFIX` with the
+  humanized first hostname label; the prefix defaults to `projectUtils.name()`.
 - Allow-list patterns in three shapes, matched in order: a domain shortcut
   (`example.com`, `@example.com`), a shell-style glob (`*@example.com`), or a
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
@@ -178,6 +179,7 @@ without touching code.
 | `TUNNEL_AUTH_ALLOW`               | empty (allow nobody)         |
 | `TUNNEL_AUTH_SUBJECT`             | `Your verification code`     |
 | `TUNNEL_AUTH_BRAND_NAME`          | the brand context `name`     |
+| `TUNNEL_AUTH_PASSKEYS`            | `true`                       |
 | `TUNNEL_AUTH_PASSKEY_NAME_PREFIX` | `projectUtils.name()`        |
 | `TUNNEL_AUTH_MESSAGE`             | `Your verification code is:` |
 | `TUNNEL_AUTH_SESSION_TTL`         | `2592000` (30 days)          |

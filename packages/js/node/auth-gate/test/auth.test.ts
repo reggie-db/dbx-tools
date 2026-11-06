@@ -197,6 +197,46 @@ describe("Better Auth runtime", () => {
     }
   });
 
+  it("can disable passkey APIs while keeping email OTP available", async () => {
+    const runtime = await createPasswordlessAuth({
+      storage: await createAuthStorage({
+        storage: "sqlite",
+        sqlitePath: join(directory, "passkeys-disabled.sqlite"),
+      }),
+      baseURL: "http://localhost",
+      basePath: "/api/email/auth",
+      appName: "Test app",
+      passkeys: false,
+      secret: "test-secret-at-least-thirty-two-characters",
+      sessionTtlSeconds: 3600,
+      codeTtlSeconds: 600,
+      maxAttempts: 5,
+      authorizeIdentity: () => true,
+      sendCode: async () => undefined,
+    });
+
+    try {
+      assert.deepEqual(await runtime.status(new Headers()), {
+        authenticated: false,
+        enabled: true,
+        passkeysEnabled: false,
+      });
+      const passkeyRoute = await runtime.handler(
+        authRequest("/passkey/generate-authenticate-options"),
+      );
+      assert.equal(passkeyRoute.status, 404);
+      const otpRoute = await runtime.handler(
+        jsonRequest("/email-otp/send-verification-otp", {
+          email: "ada@example.com",
+          type: "sign-in",
+        }),
+      );
+      assert.equal(otpRoute.status, 200);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it("does not deliver an OTP for an unauthorized identity", async () => {
     let sends = 0;
     const runtime = await createPasswordlessAuth({

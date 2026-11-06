@@ -37,6 +37,7 @@ import type { EChartsCoreOption } from "echarts";
 import { normalizeChartOption } from "./chart-option.ts";
 import { LIGHT_CHART_CHROME } from "./chart-theme.ts";
 import { downloadFile } from "./download.ts";
+import { messageTextFromParts } from "./message-text.ts";
 
 /**
  * Output formats {@link exportChat} can produce.
@@ -226,12 +227,9 @@ function splitSegments(text: string): Segment[] {
   return segments;
 }
 
-/** Concatenate a message's `text` parts (matches the on-screen bubbles). */
+/** Extract a message's visible text using the same boundaries as the on-screen bubbles. */
 export function messageText(message: UIMessage): string {
-  return message.parts
-    .filter((p): p is { type: "text"; text: string } => p.type === "text")
-    .map((p) => p.text)
-    .join("");
+  return messageTextFromParts(message.parts);
 }
 
 /**

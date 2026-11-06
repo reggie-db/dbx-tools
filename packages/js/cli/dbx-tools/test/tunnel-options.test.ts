@@ -35,6 +35,7 @@ const KEYS = [
   "TUNNEL_APP_PORT",
   "TUNNEL_PUBLIC_DOMAIN",
   "TUNNEL_AUTH_ALLOW",
+  "TUNNEL_AUTH_PASSKEYS",
   "TUNNEL_AUTH_PASSKEY_NAME_PREFIX",
   "TUNNEL_AUTH_SUBJECT",
   "TUNNEL_AUTH_SESSION_TTL",
@@ -86,20 +87,25 @@ describe("resolveTunnelOptions", () => {
     // what lets the plugin - the one owner of the default - fill it in.
     assert.equal(resolved.gateConfig.subject, undefined);
     assert.equal(resolved.gate.subject, "Your verification code");
+    assert.equal(resolved.gateConfig.passkeys, undefined);
+    assert.equal(resolved.gate.passkeys, true);
     assert.equal(resolved.gateConfig.passkeyNamePrefix, undefined);
     assert.equal(resolved.gate.passkeyNamePrefix, projectUtils.name());
   });
 
   it("resolves gate settings from the environment when no flag is given", () => {
     process.env.TUNNEL_AUTH_SUBJECT = "Env subject";
+    process.env.TUNNEL_AUTH_PASSKEYS = "false";
     process.env.TUNNEL_AUTH_PASSKEY_NAME_PREFIX = "Environment App";
     process.env.TUNNEL_AUTH_SESSION_TTL = "60";
     const fromEnv = resolveTunnelOptions({});
     assert.equal(fromEnv.gate.subject, "Env subject");
+    assert.equal(fromEnv.gate.passkeys, false);
     assert.equal(fromEnv.gate.passkeyNamePrefix, "Environment App");
     assert.equal(fromEnv.gate.sessionTtlSeconds, 60);
     // Flag wins over the environment.
     assert.equal(resolveTunnelOptions({ subject: "Flag subject" }).gate.subject, "Flag subject");
+    assert.equal(resolveTunnelOptions({ passkeys: true }).gate.passkeys, true);
     assert.equal(
       resolveTunnelOptions({ passkeyNamePrefix: "Flag App" }).gate.passkeyNamePrefix,
       "Flag App",

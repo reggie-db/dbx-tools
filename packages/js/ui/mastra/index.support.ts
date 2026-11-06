@@ -30,6 +30,7 @@ export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from
 export { GenieChatClient } from "./src/support/genie-client.ts";
 export { MastraChatRequestError, MastraPluginClient, useMastraConfig, useMastraClient, useMastraMlflowExperiment, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch, useVisualizationFetch } from "./src/support/mastra-client.ts";
 export type { MastraStreamResponse, MastraMemoryThread, ByIdFetchState } from "./src/support/mastra-client.ts";
+export { messageTextFromParts } from "./src/support/message-text.ts";
 export { defaultReasoningEffort, modelStorageKey, readStoredModel, storeSelectedModel } from "./src/support/model-selection.ts";
 export { snapshotRequestContext } from "./src/support/request-context.ts";
 export type { MastraRequestContextInput, MastraRequestContextSource } from "./src/support/request-context.ts";

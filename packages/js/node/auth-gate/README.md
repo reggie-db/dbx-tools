@@ -145,6 +145,8 @@ path.
   origin, not a private loopback address, in production.
 - `passkeyNamePrefix` controls the prefix before the humanized hostname in the
   WebAuthn display name. It defaults to `appName`.
+- `passkeys: false` disables WebAuthn routes and advertises email OTP as the only
+  login method. Passkeys are enabled by default.
 - `trustedOrigins` extends the accepted browser origins. Arbitrary `Origin` and
   `Referer` values are rejected.
 - The runtime is an authentication boundary, not a Databricks authorization

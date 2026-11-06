@@ -173,4 +173,32 @@ describe("AssistantResponseSpinner", () => {
     assert.ok(html.indexOf("String name") < codeEnd);
     assert.doesNotMatch(html, /<p>String name/);
   });
+
+  it("separates assistant text split by a tool call", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantBubble, {
+        message: {
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            { type: "text", text: "I'll search for documents related to a store." },
+            {
+              type: "dynamic-tool",
+              toolCallId: "tool-1",
+              toolName: "search_legal_documents",
+              state: "output-available",
+              input: { query: "store" },
+              output: { total: 250 },
+            },
+            { type: "text", text: '250 documents match "store".' },
+          ],
+        },
+        isLast: true,
+        status: "ready",
+      }),
+    );
+
+    assert.match(html, /store\.<\/p><p>250 documents match/);
+    assert.doesNotMatch(html, /store\.250 documents match/);
+  });
 });

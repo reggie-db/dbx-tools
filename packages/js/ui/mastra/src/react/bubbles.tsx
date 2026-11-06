@@ -52,6 +52,7 @@ import {
   type ToolEvent,
 } from "./types.ts";
 import type { ExportFormat } from "../support/export.ts";
+import { messageTextFromParts } from "../support/message-text.ts";
 import { mergeToolEvents, toolEventsFromParts } from "../support/tool-events.ts";
 
 // User / assistant message bubbles plus the inline approval card and
@@ -395,10 +396,7 @@ export const AssistantBubble = ({
         : undefined;
   const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events, terminalToolState);
   const activityItems = assistantActivityItems(message.parts, toolEvents);
-  const textParts = message.parts.filter(
-    (p): p is { type: "text"; text: string } => p.type === "text",
-  );
-  const fullText = textParts.map((p) => p.text).join("");
+  const fullText = messageTextFromParts(message.parts);
   const hasText = fullText.length > 0;
   // Brief "copied" acknowledgement on the copy button (swaps the icon to a
   // check for ~1.5s), so a tap gives visible feedback on touch where there's

@@ -53,6 +53,11 @@ export const TunnelOptionsSchema = z
     allow: list("Email allow-list patterns.").meta({ env: "TUNNEL_AUTH_ALLOW" }),
     subject: text("Verification email subject.").meta({ env: "TUNNEL_AUTH_SUBJECT" }),
     brandName: text("Verification email brand name.").meta({ env: "TUNNEL_AUTH_BRAND_NAME" }),
+    passkeys: z
+      .boolean()
+      .optional()
+      .describe("Passkey sign-in and enrollment.")
+      .meta({ env: "TUNNEL_AUTH_PASSKEYS" }),
     passkeyNamePrefix: text("Prefix for humanized tunnel passkey names.").meta({
       env: "TUNNEL_AUTH_PASSKEY_NAME_PREFIX",
     }),
@@ -138,6 +143,7 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     allow: options.allow,
     subject: options.subject,
     brandName: options.brandName,
+    passkeys: options.passkeys,
     passkeyNamePrefix: options.passkeyNamePrefix,
     message: options.message,
     // Coerced, not resolved: the plugin owns the env name and the default for

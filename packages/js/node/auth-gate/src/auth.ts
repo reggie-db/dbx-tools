@@ -43,6 +43,8 @@ export interface PasswordlessAuthOptions {
   trustedOrigins?: readonly string[];
   basePath?: string;
   appName: string;
+  /** Whether WebAuthn passkeys are enabled. Defaults to true. */
+  passkeys?: boolean;
   /** Prefix added before the humanized hostname in the WebAuthn display name. */
   passkeyNamePrefix?: string;
   secret: string;
@@ -79,6 +81,7 @@ export async function createPasswordlessAuth(
   ];
   const allowDatabricksAppOrigins = isDatabricksAppEnv();
   const rpID = new URL(origin).hostname;
+  const passkeysEnabled = config.passkeys ?? true;
   const passkeyNamePrefix = config.passkeyNamePrefix ?? config.appName;
   const basePath = config.basePath ?? "/api/auth";
   const logoutRedirectPath = normalizeLogoutRedirectPath(config.logoutRedirectPath);
@@ -178,16 +181,20 @@ export async function createPasswordlessAuth(
           });
         },
       }),
-      passkey({
-        rpID,
-        rpName: sharedAuth.passkeyDisplayName(passkeyNamePrefix, rpID) ?? config.appName,
-        origin,
-        authenticatorSelection: {
-          residentKey: "preferred",
-          userVerification: "preferred",
-        },
-        registration: { requireSession: true },
-      }),
+      ...(passkeysEnabled
+        ? [
+            passkey({
+              rpID,
+              rpName: sharedAuth.passkeyDisplayName(passkeyNamePrefix, rpID) ?? config.appName,
+              origin,
+              authenticatorSelection: {
+                residentKey: "preferred",
+                userVerification: "preferred",
+              },
+              registration: { requireSession: true },
+            }),
+          ]
+        : []),
     ] as const,
   } satisfies BetterAuthOptions;
 
@@ -212,8 +219,8 @@ export async function createPasswordlessAuth(
         authenticated: Boolean(email),
         ...(email ? { email } : {}),
         enabled: true,
-        passkeysEnabled: true,
-        passkeyNamePrefix,
+        passkeysEnabled,
+        ...(passkeysEnabled ? { passkeyNamePrefix } : {}),
       });
     }
     // OTP send + verify go straight to better-auth's native emailOTP endpoints
@@ -245,7 +252,7 @@ export async function createPasswordlessAuth(
 
   return {
     basePath,
-    passkeysEnabled: true,
+    passkeysEnabled,
     handler: async (request) => {
       if (!hasTrustedRequestOrigin(request, trustedOrigins, allowDatabricksAppOrigins)) {
         return jsonResponse({ code: "INVALID_ORIGIN", message: "Invalid origin" }, 403);
@@ -259,8 +266,8 @@ export async function createPasswordlessAuth(
         authenticated: Boolean(email),
         ...(email ? { email } : {}),
         enabled: true,
-        passkeysEnabled: true,
-        passkeyNamePrefix,
+        passkeysEnabled,
+        ...(passkeysEnabled ? { passkeyNamePrefix } : {}),
       };
     },
     close: () => config.storage.close(),

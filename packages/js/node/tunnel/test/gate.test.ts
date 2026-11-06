@@ -50,11 +50,25 @@ describe("gate config and email copy", () => {
   it("uses shared brand and conventional OTP wording", () => {
     const resolved = resolveAuthGateConfig({});
     assert.equal(resolved.brandName, defaultBrandContext.name);
+    assert.equal(resolved.passkeys, true);
     assert.equal(resolved.passkeyNamePrefix, projectUtils.name());
     assert.equal(resolved.subject, "Your verification code");
     assert.equal(resolved.message, "Your verification code is:");
     assert.equal(resolved.sessionTtlSeconds, KEY_TTL_SECONDS);
     assert.equal(resolved.logoutRedirectPath, "/");
+  });
+
+  it("can disable passkeys through config or environment", () => {
+    assert.equal(resolveAuthGateConfig({ passkeys: false }).passkeys, false);
+    const previous = process.env.TUNNEL_AUTH_PASSKEYS;
+    try {
+      process.env.TUNNEL_AUTH_PASSKEYS = "false";
+      assert.equal(resolveAuthGateConfig({}).passkeys, false);
+      assert.equal(resolveAuthGateConfig({ passkeys: true }).passkeys, true);
+    } finally {
+      if (previous === undefined) delete process.env.TUNNEL_AUTH_PASSKEYS;
+      else process.env.TUNNEL_AUTH_PASSKEYS = previous;
+    }
   });
 
   it("accepts a separate passkey display-name prefix", () => {

@@ -102,6 +102,7 @@ export const AuthGateConfigSchema = AuthStorageConfigSchema.extend({
   allow: textOrList("Email allow-list patterns."),
   subject: text("Verification email subject."),
   brandName: text("Verification email brand name."),
+  passkeys: z.boolean().optional().describe("Passkey sign-in and enrollment."),
   passkeyNamePrefix: text("Prefix for humanized tunnel passkey names."),
   message: text("Verification email message."),
   sessionTtlSeconds: z.coerce
@@ -151,6 +152,7 @@ export interface ResolvedAuthGateConfig {
   allow: string[];
   subject: string;
   brandName: string;
+  passkeys: boolean;
   passkeyNamePrefix: string;
   message: string;
   sessionTtlSeconds: number;
@@ -182,6 +184,7 @@ const DEFAULTS = {
   // `branding/brand.yaml` overrides it by passing `brandName`; the shared default
   // is the fallback when nothing is configured.
   brandName: defaultBrandContext.name,
+  passkeys: true,
   message: "Your verification code is:",
   // 30 days, the same window the cache-backed signing key is stored for.
   sessionTtlSeconds: KEY_TTL_SECONDS,
@@ -213,6 +216,7 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ],
     subject: string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
     brandName,
+    passkeys: boolean(config.passkeys, "TUNNEL_AUTH_PASSKEYS", TUNNEL_CONFIG) ?? DEFAULTS.passkeys,
     passkeyNamePrefix:
       string(config.passkeyNamePrefix, "TUNNEL_AUTH_PASSKEY_NAME_PREFIX", TUNNEL_CONFIG) ??
       projectUtils.name(),
@@ -344,6 +348,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
               trustedOrigins: [origin],
               basePath: AUTH_BASE_PATH,
               appName: this.resolved.brandName,
+              passkeys: this.resolved.passkeys,
               passkeyNamePrefix: this.resolved.passkeyNamePrefix,
               secret: Buffer.from(key).toString("base64url"),
               sessionTtlSeconds: this.resolved.sessionTtlSeconds,
@@ -370,6 +375,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       sessionTtlSeconds: this.resolved.sessionTtlSeconds,
       publicDomains: this.resolved.publicDomains,
       insecure: this.resolved.insecure,
+      passkeys: this.resolved.passkeys,
       storage: this.resolved.storage,
       logoutRedirectPath: this.resolved.logoutRedirectPath,
       sessionCutoff:
