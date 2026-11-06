@@ -13,9 +13,7 @@ import {
   type WorkspaceClientLike,
 } from "../src/model-catalog.ts";
 import { selectModel } from "../src/resolve.ts";
-import {
-  modelStatusFor,
-} from "../src/retirement.ts";
+import { modelStatusFor } from "../src/retirement.ts";
 import { lookupModels, resolveModel } from "../src/selection.ts";
 
 const CHAT_TASK = "llm/v1/chat";
@@ -127,10 +125,9 @@ describe("searchServingEndpoints / resolveModelId", () => {
     assert.equal(modelStatusFor("claude-sonnet-4-20250514").deprecated, true);
     assert.equal(modelStatusFor("claude-sonnet-4-2025-05-14").deprecated, true);
     assert.deepEqual(
-      resolveModel(
-        [chat("databricks-claude-sonnet-4"), chat("databricks-claude-sonnet-4-5")],
-        { explicit: "claude sonnet 4 5" },
-      ),
+      resolveModel([chat("databricks-claude-sonnet-4"), chat("databricks-claude-sonnet-4-5")], {
+        explicit: "claude sonnet 4 5",
+      }),
       { modelId: "databricks-claude-sonnet-4-5", source: "fuzzy-match" },
     );
   });

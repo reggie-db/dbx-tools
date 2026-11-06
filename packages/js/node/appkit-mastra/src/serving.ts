@@ -13,12 +13,12 @@
 
 import { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "@dbx-tools/model";
 import { firstNonEmpty } from "@dbx-tools/shared-core";
-import type { ResolvedModelSelection } from "@dbx-tools/shared-model";
 import {
   MODEL_OVERRIDE_HEADER,
   MODEL_OVERRIDE_QUERY,
   MODEL_OVERRIDE_BODY_FIELDS,
 } from "@dbx-tools/shared-mastra";
+import type { ResolvedModelSelection } from "@dbx-tools/shared-model";
 import type {
   AiDecideObservation,
   AiDecideStrategy,
