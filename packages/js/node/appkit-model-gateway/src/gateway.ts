@@ -43,6 +43,7 @@ import {
 
 import { AiDecideRouterService } from "./ai-decide.ts";
 import { listModelsPayload } from "./models.ts";
+import { ProfileFallback, type ModelGatewayProfile } from "./profile-fallback.ts";
 import { adaptInferenceReasoning, learnAndAdaptReasoningRetry } from "./reasoning-adapt.ts";
 import {
   DatabricksModelRegistry,
@@ -78,6 +79,7 @@ export interface ModelGatewayOptions {
   readonly model?: string;
   readonly modelClass?: ModelClassType;
   readonly preferSystemModels?: boolean;
+  readonly profiles?: readonly ModelGatewayProfile[];
 }
 
 /** Error carrying an HTTP status and protocol-safe message. */
@@ -100,14 +102,22 @@ export class ModelGateway {
   private readonly model?: string;
   private readonly modelClass?: ModelClassType;
   private readonly preferSystemModels: boolean;
+  private readonly profileFallback?: ProfileFallback;
+  private readonly primaryProfile?: ModelGatewayProfile;
 
   constructor(options: ModelGatewayOptions = {}, registry?: ModelRegistry) {
+    this.primaryProfile = options.profiles?.[0];
+    this.profileFallback =
+      options.profiles && options.profiles.length > 1
+        ? new ProfileFallback(options.profiles)
+        : undefined;
     const registryOptions: ModelRegistryOptions = {
       ...(options.cacheTtlMs !== undefined ? { ttlMs: options.cacheTtlMs } : {}),
       ...(options.overrides ? { overrides: options.overrides } : {}),
       ...(options.preferSystemModels !== undefined
         ? { preferSystemModels: options.preferSystemModels }
         : {}),
+      ...(this.primaryProfile ? { client: this.primaryProfile.client } : {}),
     };
     this.registry = registry ?? new DatabricksModelRegistry(registryOptions);
     this.aiDecide = options.aiDecideService ?? new AiDecideRouterService();
@@ -129,6 +139,7 @@ export class ModelGateway {
         },
         options.smartRouterService,
         options.smartRouterStore,
+        this.primaryProfile?.client,
       );
     }
     this.model = options.model;
@@ -174,6 +185,7 @@ export class ModelGateway {
         targets
           .map((target) => target.endpoint)
           .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined),
+        this.primaryProfile?.client,
       ));
     if (this.smartRouterMode === "true" && !smartRouterEnabled) {
       throw new ModelGatewayError(
@@ -251,7 +263,7 @@ export class ModelGateway {
           (registryTargets ?? [])
             .map((candidate) => candidate.endpoint)
             .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined),
-          undefined,
+          this.primaryProfile?.client,
           {
             strategy: aiDecideStrategy(headers),
             filters: {
@@ -344,9 +356,25 @@ export class ModelGateway {
     signal: AbortSignal,
   ): Promise<Response> {
     if (route.upstreamProtocol === "ai-sdk") {
-      return translateGatewayRequest(route, body, signal);
+      return translateGatewayRequest(route, body, signal, {
+        ...(this.primaryProfile ? { client: this.primaryProfile.client } : {}),
+        ...(this.profileFallback
+          ? { fetch: this.profileFallback.createFetch(route.upstreamModel) }
+          : {}),
+      });
     }
-    return fetchDatabricks({ route, body, headers, signal });
+    if (this.profileFallback) {
+      return this.profileFallback.request(route.upstreamModel, signal, ({ client }) =>
+        fetchDatabricks({ route, body, headers, signal, client }),
+      );
+    }
+    return fetchDatabricks({
+      route,
+      body,
+      headers,
+      signal,
+      ...(this.primaryProfile ? { client: this.primaryProfile.client } : {}),
+    });
   }
 }
 

@@ -32,8 +32,22 @@ current-user service management, and standard root compatibility paths.
 Use the standalone CLI when a tool expects an OpenAI-compatible base URL:
 
 ```sh
-dbx model-gateway --profile PROFILE --listen tcp://127.0.0.1:4000
+dbx model-gateway \
+  --profile PRIMARY-PROFILE \
+  --profile FALLBACK-PROFILE \
+  --listen tcp://127.0.0.1:4000
 ```
+
+Profiles are tried in declaration order. Model discovery and routing use the
+first profile. When an inference request receives HTTP 429, the gateway retries
+the same upstream model through the next profile whose workspace is available.
+Cooldowns are shared by workspace and model id, so two profiles for the same
+workspace do not bypass the same limit. After the reported retry interval
+expires, requests return to the first profile automatically.
+
+`Retry-After` takes precedence over a JSON `retry_after` value. When Databricks
+reports a workspace tokens-per-minute limit without either value, the gateway
+uses a 60-second cooldown; other 429 responses use 15 seconds.
 
 The system-model preference routes non-exact Responses requests, including
 Codex traffic, through `system.ai.*` AI Gateway services instead of workspace

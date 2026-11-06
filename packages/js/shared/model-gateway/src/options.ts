@@ -88,6 +88,22 @@ export const SmartRouterModeSchema = z
     "Smart Router mode: auto advertises it only when available, true requires it, and false disables it.",
   );
 
+const DatabricksProfileNameSchema = DatabricksOptionsSchema.shape.profile.unwrap();
+
+export const ModelGatewayProfilesSchema = z
+  .union([DatabricksProfileNameSchema, z.array(DatabricksProfileNameSchema).min(1)])
+  .transform((value) => (Array.isArray(value) ? value : [value]))
+  .optional()
+  .describe("Ordered Databricks profiles used for model discovery and rate-limit fallback.");
+
+const ModelGatewayCliProfilesSchema = z
+  .preprocess(
+    (value) => (typeof value === "string" ? [value] : value),
+    z.array(DatabricksProfileNameSchema).min(1).optional(),
+  )
+  .meta(DatabricksOptionsSchema.shape.profile.meta() ?? {})
+  .describe("Ordered Databricks profiles used for model discovery and rate-limit fallback.");
+
 const ModelGatewayRuntimeOptionsShape = {
   smartRouter: SmartRouterModeSchema.default("auto"),
   smartRouterTimeoutMs: SmartRouterTimeoutMsSchema.default(SMART_ROUTER_TIMEOUT_MS_DEFAULT),
@@ -108,9 +124,7 @@ const ModelGatewayRuntimeOptionsShape = {
   listen: listenAddressSchema({ port: 4000, loopback: true }).describe(
     "Loopback listener address.",
   ),
-  profile: DatabricksOptionsSchema.shape.profile.describe(
-    "Databricks profile used for model discovery and requests.",
-  ),
+  profile: ModelGatewayProfilesSchema,
   bodyLimit: z.string().trim().min(1).default("100mb").describe("Maximum JSON request body size."),
   bearerToken: z
     .string()
@@ -133,6 +147,7 @@ export const ModelGatewayOptionsSchema = ModelSelectionOptionsSchema.safeExtend(
 
 export const ModelGatewayCliOptionsSchema = ModelSelectionOptionsSchema.safeExtend({
   ...ModelGatewayRuntimeOptionsShape,
+  profile: ModelGatewayCliProfilesSchema,
   smartRouterTimeoutMs: z.coerce
     .number()
     .pipe(SmartRouterTimeoutMsSchema)

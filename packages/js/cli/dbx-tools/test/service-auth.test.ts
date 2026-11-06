@@ -10,7 +10,37 @@ describe("Databricks service authentication", () => {
     const automatic = databricksServiceAuthCommand("auto", "PROFILE");
     assert.match(automatic?.entrypoint ?? "", /dbx-service-auth\.ts$/);
     assert.deepEqual(automatic?.arguments, ["--wait-for-auth", "auto", "--profile", "PROFILE"]);
+    assert.deepEqual(databricksServiceAuthCommand("true", ["ONE", "TWO"])?.arguments, [
+      "--wait-for-auth",
+      "true",
+      "--profile",
+      "ONE",
+      "--profile",
+      "TWO",
+    ]);
     assert.equal(databricksServiceAuthCommand("false", "PROFILE"), undefined);
+  });
+
+  it("preflights every configured profile in order", async () => {
+    const created: Array<string | undefined> = [];
+    const waited: unknown[] = [];
+    await runDatabricksServiceAuth(
+      { waitForAuth: "true", profile: ["ONE", "TWO"] },
+      {
+        resolveProfile: () => null,
+        createWorkspaceClient: async (options) => {
+          created.push(options.profile);
+          return { profile: options.profile } as never;
+        },
+        waitForWorkspaceAuth: async (client) => {
+          waited.push(client);
+          return {} as never;
+        },
+      },
+    );
+
+    assert.deepEqual(created, ["ONE", "TWO"]);
+    assert.deepEqual(waited, [{ profile: "ONE" }, { profile: "TWO" }]);
   });
 
   it("selects the packaged JavaScript bin from compiled modules", () => {

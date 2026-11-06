@@ -68,6 +68,7 @@ export function gatewayBearerMiddleware(token: string): express.RequestHandler {
 /** Start the foreground model gateway and keep its AppKit server active. */
 export async function startModelGateway(options: ModelGatewayOptions = {}): Promise<void> {
   const resolved = resolveModelGatewayOptions(options);
+  const profiles = await createModelGatewayProfiles(resolved.profile);
   const gateway = new ModelGateway({
     smartRouter: resolved.smartRouter,
     smartRouterContextTokenBudget: resolved.smartRouterContextTokenBudget,
@@ -78,12 +79,10 @@ export async function startModelGateway(options: ModelGatewayOptions = {}): Prom
     ...(resolved.model ? { model: resolved.model } : {}),
     ...(resolved.modelClass ? { modelClass: resolved.modelClass } : {}),
     preferSystemModels: resolved.preferSystemModels,
-  });
-  const client = await createWorkspaceClient({
-    ...(resolved.profile ? { profile: resolved.profile } : {}),
+    profiles,
   });
   await createApp({
-    client,
+    client: profiles[0]!.client,
     plugins: [server(appKitServerOptions(resolved))],
     onPluginsReady(appkit) {
       appkit.server.extend((application) => {
@@ -118,7 +117,7 @@ export async function selectSmartRouterModel(
 ): Promise<Readonly<Record<string, unknown>>> {
   const resolved = resolveModelGatewayOptions(options);
   const client = await createWorkspaceClient({
-    ...(resolved.profile ? { profile: resolved.profile } : {}),
+    ...(resolved.profile?.[0] ? { profile: resolved.profile[0] } : {}),
   });
   const registry = new DatabricksModelRegistry({
     client,
@@ -147,4 +146,24 @@ export async function selectSmartRouterModel(
     ...(selected.rationale ? { rationale: selected.rationale } : {}),
     ...(selected.params ? { params: selected.params } : {}),
   };
+}
+
+async function createModelGatewayProfiles(profiles: readonly string[] | undefined): Promise<
+  readonly {
+    readonly profile?: string;
+    readonly workspace: string;
+    readonly client: Awaited<ReturnType<typeof createWorkspaceClient>>;
+  }[]
+> {
+  const names = profiles && profiles.length > 0 ? profiles : [undefined];
+  return Promise.all(
+    names.map(async (profile) => {
+      const client = await createWorkspaceClient(profile ? { profile } : {});
+      return {
+        ...(profile ? { profile } : {}),
+        workspace: (await client.config.getHost()).toString(),
+        client,
+      };
+    }),
+  );
 }

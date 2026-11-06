@@ -10,19 +10,33 @@ export function externalRuntimePackages(dependencies: Readonly<Record<string, st
   return Object.keys(dependencies).filter((name) => !name.startsWith("@dbx-tools/"));
 }
 
+/** Manifest field recording the external packages each installed service declared. */
+const SERVICE_OWNERS_FIELD = "dbxToolsServices";
+
+/**
+ * Install one service's external packages into the shared runtime directory.
+ *
+ * Every service shares one manifest, so each install replaces only the owning
+ * service's recorded package set. A package leaves the manifest once no
+ * service declares it. Entries written before ownership was recorded have no
+ * known owner and are preserved.
+ */
 export async function installServiceRuntime(
   bunExecutable: string,
   directory: string,
   dependencies: Readonly<Record<string, string>>,
+  owner: string,
 ): Promise<void> {
   const runtimeDirectory = resolve(directory);
-  if (await serviceRuntimeSatisfied(runtimeDirectory, dependencies)) return;
+  if (await serviceRuntimeSatisfied(runtimeDirectory, dependencies, owner)) return;
   await withFileLock(["cli-service-runtime", runtimeDirectory], async () => {
-    if (await serviceRuntimeSatisfied(runtimeDirectory, dependencies)) return;
+    if (await serviceRuntimeSatisfied(runtimeDirectory, dependencies, owner)) return;
     await mkdir(runtimeDirectory, { recursive: true });
     const packages = Object.keys(dependencies);
     const manifestPath = join(runtimeDirectory, "package.json");
     const current = await readOptionalRecord(manifestPath);
+    const previousOwners = ownerRecords(current[SERVICE_OWNERS_FIELD]);
+    const owners = { ...previousOwners, [owner]: { ...dependencies } };
     await writeFile(
       manifestPath,
       `${JSON.stringify(
@@ -31,9 +45,11 @@ export async function installServiceRuntime(
           name: "@dbx-tools/service-runtime",
           private: true,
           dependencies: {
-            ...stringRecord(current.dependencies),
+            ...unownedDependencies(stringRecord(current.dependencies), previousOwners),
+            ...Object.assign({}, ...Object.values(owners)),
             ...dependencies,
           },
+          [SERVICE_OWNERS_FIELD]: owners,
         },
         null,
         2,
@@ -62,8 +78,11 @@ export async function installServiceRuntime(
 async function serviceRuntimeSatisfied(
   directory: string,
   dependencies: Readonly<Record<string, string>>,
+  owner: string,
 ): Promise<boolean> {
   const manifest = await readOptionalRecord(join(directory, "package.json"));
+  const recorded = ownerRecords(manifest[SERVICE_OWNERS_FIELD])[owner];
+  if (!recorded || !sameRecord(recorded, dependencies)) return false;
   const declared = stringRecord(manifest.dependencies);
   for (const [name, version] of Object.entries(dependencies)) {
     if (declared[name] !== version) return false;
@@ -136,6 +155,30 @@ async function readOptionalRecord(path: string): Promise<Record<string, unknown>
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     throw error;
   }
+}
+
+function ownerRecords(value: unknown): Record<string, Record<string, string>> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).map(([owner, dependencies]) => [owner, stringRecord(dependencies)]),
+  );
+}
+
+/** Manifest dependencies that no recorded service declared, such as pre-ownership installs. */
+function unownedDependencies(
+  dependencies: Readonly<Record<string, string>>,
+  owners: Readonly<Record<string, Readonly<Record<string, string>>>>,
+): Record<string, string> {
+  const owned = new Set(Object.values(owners).flatMap((record) => Object.keys(record)));
+  return Object.fromEntries(Object.entries(dependencies).filter(([name]) => !owned.has(name)));
+}
+
+function sameRecord(
+  left: Readonly<Record<string, string>>,
+  right: Readonly<Record<string, string>>,
+): boolean {
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 }
 
 function stringRecord(value: unknown): Record<string, string> {

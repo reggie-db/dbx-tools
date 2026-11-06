@@ -27,7 +27,7 @@ describe("model-gateway options", () => {
     assert.deepEqual(
       resolveModelGatewayCliOptions({
         listen: " LOCALHOST:4400 ",
-        profile: " PROFILE ",
+        profile: [" PROFILE ", " FALLBACK "],
       }),
       {
         smartRouter: "auto",
@@ -38,11 +38,19 @@ describe("model-gateway options", () => {
         smartRouterRouteTtlSeconds: 21600,
         preferSystemModels: false,
         listen: { scheme: "tcp", host: "localhost", port: 4400 },
-        profile: "PROFILE",
+        profile: ["PROFILE", "FALLBACK"],
         bodyLimit: "100mb",
         runtimeInfo: false,
       },
     );
+  });
+
+  it("normalizes one or many ordered profiles", () => {
+    assert.deepEqual(resolveModelGatewayOptions({ profile: "PRIMARY" }).profile, ["PRIMARY"]);
+    assert.deepEqual(resolveModelGatewayOptions({ profile: ["PRIMARY", "SECONDARY"] }).profile, [
+      "PRIMARY",
+      "SECONDARY",
+    ]);
   });
 
   it("allows ephemeral embedded ports but rejects them for the CLI", () => {

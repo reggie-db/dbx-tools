@@ -52,8 +52,16 @@ dbx brand "Retail analytics for store operators" \
 ## Serve models to local tools
 
 ```sh
-dbx model-gateway --profile MY-PROFILE --listen tcp://127.0.0.1:4000
+dbx model-gateway \
+  --profile PRIMARY-PROFILE \
+  --profile FALLBACK-PROFILE \
+  --listen tcp://127.0.0.1:4000
 ```
+
+Repeated profiles form an ordered rate-limit fallback list. Discovery uses the
+first profile. An HTTP 429 cools down that workspace and model id, retries the
+next available workspace, and returns to the first profile after the retry
+interval expires.
 
 Point an OpenAI-compatible client at
 [http://127.0.0.1:4000/v1](http://127.0.0.1:4000/v1). The generated
@@ -671,7 +679,7 @@ dbx model-gateway [options] [command]
 | `--prefer-system-models`                           | Prefer system.ai services over serving endpoints for non-exact model selection. (default: false, env: PREFER_SYSTEM_MODELS)                                                |
 | `--no-prefer-system-models`                        | Disable prefer system.ai services over serving endpoints for non-exact model selection.                                                                                    |
 | `-l, --listen <value>`                             | Loopback listener address. (default: tcp://localhost:4000, env: LISTEN)                                                                                                    |
-| `--profile <value>`                                | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE)                                                                                 |
+| `--profile <value>`                                | Ordered Databricks profiles used for model discovery and rate-limit fallback. (env: DATABRICKS_CONFIG_PROFILE)                                                             |
 | `--body-limit <value>`                             | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                                                                                                        |
 | `-r, --runtime-info`                               | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                                                                                                 |
 | `--no-runtime-info`                                | Disable print runtime implementation metadata.                                                                                                                             |

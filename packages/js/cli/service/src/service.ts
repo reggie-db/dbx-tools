@@ -60,11 +60,12 @@ export type CliServiceCompiler = (
   external?: readonly string[],
 ) => Promise<void>;
 
-/** Install exact external runtime dependencies into the dbx-tools home. */
+/** Install one service's exact external runtime dependencies into the dbx-tools home. */
 export type CliServiceRuntimeInstaller = (
   bunExecutable: string,
   directory: string,
   dependencies: Readonly<Record<string, string>>,
+  owner: string,
 ) => Promise<void>;
 
 /** Install a Python package into a service-owned uv environment. */
@@ -229,6 +230,7 @@ export class CliService implements CliServiceLifecycle {
       this.bunExecutable,
       this.globalHomeDirectory,
       Object.fromEntries(Object.entries(dependencies).filter(([name]) => external.has(name))),
+      this.definition.id,
     );
     const version = this.definition.version ?? owner.version;
     const artifactId = `${safeToken(version)}-${randomUUID()}`;
@@ -457,7 +459,11 @@ export class CliService implements CliServiceLifecycle {
     runtimeEnvironment: Readonly<Record<string, string>>,
     artifactBinDirectory: string,
   ): Promise<CliServiceCommand> {
-    const environment = { ...command.environment, ...runtimeEnvironment };
+    const environment = {
+      ...this.inheritedEnvironment(),
+      ...command.environment,
+      ...runtimeEnvironment,
+    };
     if (command.executable) {
       return {
         ...command,
@@ -478,6 +484,21 @@ export class CliService implements CliServiceLifecycle {
       ...(Object.keys(environment).length > 0 ? { environment } : {}),
       cwd: command.cwd ?? this.globalHomeDirectory,
     };
+  }
+
+  /**
+   * Installer PATH persisted into every service command.
+   *
+   * launchd starts login agents with `/usr/bin:/bin:/usr/sbin:/sbin`, and
+   * desktop autostart sessions often omit shell-profile additions, so tools
+   * such as the Databricks CLI or uv resolve at install time but not at
+   * launch. Windows startup entries inherit the full user environment and use
+   * case-insensitive `Path`, so a second copy would only add ambiguity there.
+   */
+  private inheritedEnvironment(): Record<string, string> {
+    if (this.runtime.platform === "win32") return {};
+    const path = this.runtime.environment.PATH;
+    return path ? { PATH: path } : {};
   }
 
   private async ensureCompiledBinary(

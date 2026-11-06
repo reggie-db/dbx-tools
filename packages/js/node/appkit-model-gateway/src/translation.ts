@@ -4,7 +4,7 @@
  * @module
  */
 
-import { getExecutionContext } from "@databricks/appkit";
+import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
 import { invoke } from "@dbx-tools/model";
 import {
   decodeGatewayRequest,
@@ -26,6 +26,10 @@ export async function translateGatewayRequest(
   route: GatewayRoute,
   body: Readonly<Record<string, unknown>>,
   signal: AbortSignal,
+  options: {
+    readonly client?: WorkspaceClient;
+    readonly fetch?: typeof globalThis.fetch;
+  } = {},
 ): Promise<Response> {
   const decoded = decodeGatewayRequest(route.clientProtocol, body);
   logger.debug("decoded request", {
@@ -35,7 +39,7 @@ export async function translateGatewayRequest(
     stream: body.stream === true,
     toolCount: Object.keys(decoded.tools).length,
   });
-  const model = await translationModel(route);
+  const model = await translationModel(route, options.client, options.fetch);
   const result = streamText({
     model,
     messages: decoded.messages,
@@ -110,8 +114,11 @@ export async function translateGatewayRequest(
   );
 }
 
-async function translationModel(route: GatewayRoute): Promise<LanguageModel> {
-  const client = getExecutionContext().client;
+async function translationModel(
+  route: GatewayRoute,
+  client: WorkspaceClient = getExecutionContext().client,
+  fetcher?: typeof globalThis.fetch,
+): Promise<LanguageModel> {
   const host = (await client.config.getHost()).toString();
   const headers = await invoke.authHeaders(client);
   const protocol = translationProtocol(route);
@@ -121,6 +128,7 @@ async function translationModel(route: GatewayRoute): Promise<LanguageModel> {
     protocol,
     host,
     headers,
+    ...(fetcher ? { fetch: fetcher } : {}),
   });
 }
 

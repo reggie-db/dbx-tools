@@ -9,9 +9,21 @@ Use the foreground CLI for one local session:
 
 ```bash
 dbx model-gateway \
-  --profile <profile> \
+  --profile <primary-profile> \
+  --profile <fallback-profile> \
   --listen tcp://127.0.0.1:4000
 ```
+
+Repeat `--profile` to define an ordered fallback list. Discovery, model
+selection, Smart Router, and AI Decide use the first profile. If inference
+returns HTTP 429, the gateway retries the same model through the next profile
+whose workspace is not cooling down. Cooldowns are scoped to workspace and
+model id, not profile name, and the gateway returns to the first profile after
+the retry interval expires.
+
+The gateway uses `Retry-After` before a JSON `retry_after` field. A Databricks
+workspace tokens-per-minute response without explicit timing cools down for 60
+seconds; other 429 responses without timing cool down for 15 seconds.
 
 Select `auto` when the gateway should choose both the concrete model and
 reasoning budget for the current user turn:
@@ -33,7 +45,10 @@ Install the current-user service when local tools need the endpoint after the
 terminal closes:
 
 ```bash
-dbx model-gateway service install --profile <profile>
+dbx model-gateway \
+  --profile <primary-profile> \
+  --profile <fallback-profile> \
+  service install
 dbx model-gateway service status
 ```
 

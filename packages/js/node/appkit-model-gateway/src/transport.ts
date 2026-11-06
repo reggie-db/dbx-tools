@@ -4,7 +4,7 @@
  * @module
  */
 
-import { getExecutionContext } from "@databricks/appkit";
+import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
 import { refreshWorkspaceClientAuthentication } from "@dbx-tools/databricks";
 import { log, toError } from "@dbx-tools/shared-core";
 import { stripUnsupportedChatFields } from "@dbx-tools/shared-model";
@@ -45,11 +45,12 @@ export interface DatabricksTransportRequest {
   readonly body: Readonly<Record<string, unknown>>;
   readonly headers: Headers;
   readonly signal: AbortSignal;
+  readonly client?: WorkspaceClient;
 }
 
 /** Execute a direct route with SDK-owned authentication and an unbuffered response body. */
 export async function fetchDatabricks(request: DatabricksTransportRequest): Promise<Response> {
-  const client = getExecutionContext().client;
+  const client = request.client ?? getExecutionContext().client;
   const host = (await client.config.getHost()).toString();
   const headers = new Headers({ "content-type": "application/json" });
   request.headers.forEach((value, name) => {
@@ -58,7 +59,6 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
       headers.set(name, value);
     }
   });
-  await client.config.authenticate(headers);
   const url = upstreamUrl(host, request.route);
   const startedAt = Date.now();
   const body = JSON.stringify(directDatabricksRequestBody(request.route, request.body));
@@ -69,28 +69,12 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
     upstreamProtocol: request.route.upstreamProtocol,
   });
   try {
-    let response = await fetch(url, {
+    const response = await fetchWorkspace(client, url, {
       method: "POST",
       headers,
       body,
       signal: request.signal,
     });
-    if (response.status === 401 && (await refreshWorkspaceClientAuthentication(client))) {
-      logger.debug("retrying rejected upstream credential", {
-        model: request.route.upstreamModel,
-        upstreamProtocol: request.route.upstreamProtocol,
-      });
-      await response.body?.cancel();
-      headers.delete("authorization");
-      headers.delete("x-databricks-workspace-id");
-      await client.config.authenticate(headers);
-      response = await fetch(url, {
-        method: "POST",
-        headers,
-        body,
-        signal: request.signal,
-      });
-    }
     const details = {
       elapsedMs: Date.now() - startedAt,
       model: request.route.upstreamModel,
@@ -115,6 +99,32 @@ export async function fetchDatabricks(request: DatabricksTransportRequest): Prom
     });
     throw error;
   }
+}
+
+/** Execute one authenticated workspace request and refresh a rejected credential once. */
+export async function fetchWorkspace(
+  client: WorkspaceClient,
+  input: string | URL,
+  init: RequestInit,
+  fetcher: typeof globalThis.fetch = globalThis.fetch.bind(globalThis),
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.delete("authorization");
+  headers.delete("x-databricks-workspace-id");
+  await client.config.authenticate(headers);
+  let response = await fetcher(input, { ...init, headers });
+  if (response.status !== 401 || !(await refreshWorkspaceClientAuthentication(client))) {
+    return response;
+  }
+  logger.debug("retrying rejected workspace credential", {
+    path: new URL(input).pathname,
+  });
+  await response.body?.cancel();
+  headers.delete("authorization");
+  headers.delete("x-databricks-workspace-id");
+  await client.config.authenticate(headers);
+  response = await fetcher(input, { ...init, headers });
+  return response;
 }
 
 /** Remove client compatibility fields rejected by direct Databricks protocols. */

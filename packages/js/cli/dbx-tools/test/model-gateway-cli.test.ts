@@ -97,6 +97,8 @@ describe("model gateway CLI", () => {
         ":4401",
         "--profile",
         "SERVICE-PROFILE",
+        "--profile",
+        "FALLBACK-PROFILE",
       ],
       { from: "user" },
     );
@@ -119,6 +121,8 @@ describe("model gateway CLI", () => {
       "tcp://localhost:4401",
       "--profile",
       "SERVICE-PROFILE",
+      "--profile",
+      "FALLBACK-PROFILE",
       "--body-limit",
       "100mb",
     ]);
@@ -128,6 +132,8 @@ describe("model gateway CLI", () => {
       "true",
       "--profile",
       "SERVICE-PROFILE",
+      "--profile",
+      "FALLBACK-PROFILE",
     ]);
     assert.deepEqual(definition?.menu, [
       {
@@ -152,7 +158,7 @@ describe("model gateway CLI", () => {
         smartRouterProbeTtlMs: 300000,
         smartRouterRouteTtlSeconds: 21600,
         listen: { scheme: "tcp", host: "localhost", port: 4401 },
-        profile: "SERVICE-PROFILE",
+        profile: ["SERVICE-PROFILE", "FALLBACK-PROFILE"],
         bodyLimit: "100mb",
         preferSystemModels: false,
       },
@@ -174,9 +180,10 @@ describe("model gateway CLI", () => {
       async start(options) {
         calls.push(options);
       },
-    }).parseAsync(["--listen", "4410", "--profile", "MODEL-PROFILE"], {
-      from: "user",
-    });
+    }).parseAsync(
+      ["--listen", "4410", "--profile", "MODEL-PROFILE", "--profile", "FALLBACK-PROFILE"],
+      { from: "user" },
+    );
 
     assert.deepEqual(calls, [
       {
@@ -187,7 +194,7 @@ describe("model gateway CLI", () => {
         smartRouterProbeTtlMs: 300000,
         smartRouterRouteTtlSeconds: 21600,
         listen: { scheme: "tcp", host: "localhost", port: 4410 },
-        profile: "MODEL-PROFILE",
+        profile: ["MODEL-PROFILE", "FALLBACK-PROFILE"],
         bodyLimit: "100mb",
         preferSystemModels: false,
       },

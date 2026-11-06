@@ -187,6 +187,22 @@ describe("CLI service lifecycle", () => {
     );
   });
 
+  it("persists the installer PATH into every service command", async () => {
+    const configuration = await installWithPath("linux", "/opt/homebrew/bin:/usr/bin", {
+      PATH: "/explicit/bin",
+    });
+
+    assert.equal(configuration.command.environment?.PATH, "/opt/homebrew/bin:/usr/bin");
+    assert.equal(configuration.authCommand.environment?.PATH, "/explicit/bin");
+  });
+
+  it("leaves the inherited Windows Path untouched", async () => {
+    const configuration = await installWithPath("win32", "C:\\Tools");
+
+    assert.equal(configuration.command.environment?.PATH, undefined);
+    assert.equal(configuration.authCommand.environment?.PATH, undefined);
+  });
+
   it("requires an authentication preflight when explicitly enabled", async () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-"));
     const service = new CliService(
@@ -216,3 +232,52 @@ describe("CLI service lifecycle", () => {
     );
   });
 });
+
+interface InstalledEnvironments {
+  command: { environment?: Record<string, string> };
+  authCommand: { environment?: Record<string, string> };
+}
+
+async function installWithPath(
+  platform: NodeJS.Platform,
+  path: string,
+  authEnvironment?: Record<string, string>,
+): Promise<InstalledEnvironments> {
+  const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-"));
+  const dataDirectory = join(root, "data");
+  const trayExecutable = join(root, "tray");
+  await writeFile(trayExecutable, "#!/bin/sh\nexit 0\n");
+  const service = new CliService(
+    {
+      id: "com.example.gateway",
+      name: "Example Gateway",
+      packageName: "@dbx-tools/cli-service",
+      version: "1.2.3",
+      icon: join(root, "icon.png"),
+      dataDirectory,
+      waitForAuth: "auto",
+      authCommand: {
+        executable: join(root, "auth"),
+        ...(authEnvironment ? { environment: authEnvironment } : {}),
+      },
+      command: { executable: join(root, "gateway") },
+    },
+    {
+      platform,
+      homeDirectory: root,
+      temporaryDirectory: root,
+      environment: { PATH: path, APPDATA: join(root, "appdata"), XDG_CONFIG_HOME: root },
+      globalHomeDirectory: join(root, ".dbx-tools"),
+      hostEntrypoint: join(root, "service-host.ts"),
+      trayExecutable,
+      async compile(_entrypoint, output) {
+        await writeFile(output, "");
+      },
+      async installRuntime() {},
+    },
+  );
+  await service.install({ start: false });
+  return JSON.parse(
+    await readFile(join(dataDirectory, "service.json"), "utf8"),
+  ) as InstalledEnvironments;
+}
