@@ -102,7 +102,7 @@ export class ProfileFallback {
       this.cooldowns.set(this.key(profile.workspace, model), this.now() + rateLimit.retryAfterMs);
       logger.warn("model profile rate limited", {
         errorCode: rateLimit.errorCode,
-        message: rateLimit.message,
+        upstreamMessage: rateLimit.message,
         model,
         profile: profile.profile ?? "default",
         profileIndex,
