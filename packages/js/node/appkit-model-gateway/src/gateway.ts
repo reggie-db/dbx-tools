@@ -117,7 +117,14 @@ export class ModelGateway {
       ...(options.preferSystemModels !== undefined
         ? { preferSystemModels: options.preferSystemModels }
         : {}),
-      ...(this.primaryProfile ? { client: this.primaryProfile.client } : {}),
+      ...(this.primaryProfile
+        ? {
+            client: this.primaryProfile.client,
+            ...(this.primaryProfile.profile
+              ? { cacheIdentity: `profile:${this.primaryProfile.profile}` }
+              : {}),
+          }
+        : {}),
     };
     this.registry = registry ?? new DatabricksModelRegistry(registryOptions);
     this.aiDecide = options.aiDecideService ?? new AiDecideRouterService();

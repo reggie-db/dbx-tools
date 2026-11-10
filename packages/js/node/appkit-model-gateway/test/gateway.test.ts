@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { WorkspaceClient } from "@databricks/appkit";
 import type { ModelTarget } from "@dbx-tools/shared-model-gateway";
 
 import {
@@ -99,6 +100,63 @@ describe("ModelGateway model discovery", () => {
     );
 
     await assert.rejects(() => gateway.models(), /required but unavailable/);
+  });
+
+  it("keeps cached discovery on the primary when fallback profiles are configured", async () => {
+    let primaryLists = 0;
+    let fallbackLists = 0;
+    const primaryWorkspace = `https://profile-cache-${Date.now()}.example.com`;
+    const fallbackWorkspace = `https://profile-fallback-${Date.now()}.example.com`;
+    const primaryClient = {
+      config: {
+        async getHost() {
+          return new URL(primaryWorkspace);
+        },
+      },
+      servingEndpoints: {
+        async *list() {
+          primaryLists += 1;
+          yield {
+            name: "databricks-gpt-5-6-sol",
+            task: "llm/v1/chat",
+            state: { ready: "READY" },
+          };
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const fallbackClient = {
+      config: {
+        async getHost() {
+          return new URL(fallbackWorkspace);
+        },
+      },
+      servingEndpoints: {
+        async *list() {
+          fallbackLists += 1;
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const gateway = new ModelGateway({
+      profiles: [
+        {
+          profile: "PRIMARY",
+          workspace: primaryWorkspace,
+          client: primaryClient,
+        },
+        {
+          profile: "FALLBACK",
+          workspace: fallbackWorkspace,
+          client: fallbackClient,
+        },
+      ],
+      smartRouter: "false",
+    });
+
+    await gateway.models(false, "gpt");
+    await gateway.models(false, "gpt");
+
+    assert.equal(primaryLists, 1);
+    assert.equal(fallbackLists, 0);
   });
 });
 

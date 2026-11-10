@@ -45,6 +45,8 @@ export interface ModelRegistryOptions {
   readonly preferSystemModels?: boolean;
   /** Discover models with this client instead of the AppKit execution context. */
   readonly client?: WorkspaceClient;
+  /** Trusted credential identity used to isolate cached catalogues for an injected client. */
+  readonly cacheIdentity?: string;
 }
 
 interface RegistryContext {
@@ -59,12 +61,14 @@ export class DatabricksModelRegistry implements ModelRegistry {
   private readonly overrides: readonly ModelCapabilityOverride[];
   private readonly preferSystemModels: boolean;
   private readonly client: WorkspaceClient | undefined;
+  private readonly cacheIdentity: string | undefined;
 
   constructor(options: ModelRegistryOptions = {}) {
     this.ttlMs = positiveTtl(options.ttlMs);
     this.overrides = options.overrides ?? [];
     this.preferSystemModels = options.preferSystemModels ?? false;
     this.client = options.client;
+    this.cacheIdentity = options.cacheIdentity;
   }
 
   async list(): Promise<ModelTarget[]> {
@@ -234,7 +238,11 @@ export class DatabricksModelRegistry implements ModelRegistry {
   private async context(): Promise<RegistryContext> {
     if (this.client) {
       const host = (await this.client.config.getHost()).toString();
-      return { client: this.client, host };
+      return {
+        client: this.client,
+        host,
+        ...(this.cacheIdentity ? { identity: this.cacheIdentity } : {}),
+      };
     }
     return registryContext();
   }

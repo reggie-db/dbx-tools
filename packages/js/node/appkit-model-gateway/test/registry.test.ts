@@ -23,16 +23,35 @@ describe("DatabricksModelRegistry system-model preference", () => {
   });
 });
 
-function workspaceClient(): WorkspaceClient {
+describe("DatabricksModelRegistry catalogue caching", () => {
+  it("reuses an injected client catalogue when given a trusted cache identity", async () => {
+    const calls = { value: 0 };
+    const registry = new DatabricksModelRegistry({
+      cacheIdentity: "profile:test",
+      client: workspaceClient(calls, `https://cache-${Date.now()}.example.com`),
+    });
+
+    await registry.list();
+    await registry.list();
+
+    assert.equal(calls.value, 1);
+  });
+});
+
+function workspaceClient(
+  calls?: { value: number },
+  host = "https://workspace.example.com",
+): WorkspaceClient {
   const endpoints = [endpoint("databricks-gpt-5-6-sol"), endpoint("system.ai.gpt-5-6-sol")];
   return {
     config: {
       async getHost() {
-        return new URL("https://workspace.example.com");
+        return new URL(host);
       },
     },
     servingEndpoints: {
       async *list() {
+        if (calls) calls.value += 1;
         yield* endpoints;
       },
     },
