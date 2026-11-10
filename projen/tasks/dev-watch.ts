@@ -12,6 +12,7 @@ import { DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY, DEV_WATCH_TASK } from "../src
 import {
   recordedPackages,
   resolveRepoRoot,
+  type RecordedPackage,
   workspaceDependencyDirectories,
 } from "../src/packages.ts";
 
@@ -52,11 +53,6 @@ export const DevWatchOptionsSchema = z.object({
 export type DevWatchOptions = z.output<typeof DevWatchOptionsSchema> & {
   readonly command: readonly string[];
 };
-
-interface WorkspacePackage {
-  readonly dir: string;
-  readonly name?: string;
-}
 
 /** Parse watcher flags while passing every token after the command through unchanged. */
 export function parseDevWatchOptions(args: readonly string[]): DevWatchOptions {
@@ -123,10 +119,8 @@ export function serializedWatchGlobArgs(options: DevWatchForwardOptions): string
   });
 }
 
-function workspacePackages(root: string): WorkspacePackage[] {
-  return recordedPackages(root)
-    .map(({ dir, name }) => ({ dir, name }))
-    .sort((left, right) => right.dir.length - left.dir.length);
+function workspacePackages(root: string): RecordedPackage[] {
+  return recordedPackages(root).sort((left, right) => right.dir.length - left.dir.length);
 }
 
 function optionArgument(
@@ -155,8 +149,8 @@ function commandWorkingDirectory(command: readonly string[], cwd: string): strin
 function commandPackage(
   command: readonly string[],
   cwd: string,
-  packages: readonly WorkspacePackage[],
-): WorkspacePackage | undefined {
+  packages: readonly RecordedPackage[],
+): RecordedPackage | undefined {
   const selected = optionArgument(command, "--filter", "-F");
   if (selected) {
     const filtered = packages.find(({ name }) => name === selected);
@@ -182,7 +176,7 @@ export function devWatchDirectories(
   const packages = workspacePackages(root);
   const owner = commandPackage(command, cwd, packages);
   if (!owner) return [commandWorkingDirectory(command, cwd)];
-  const dependencies = owner.name ? workspaceDependencyDirectories(owner.name, root) : [];
+  const dependencies = owner.name ? workspaceDependencyDirectories(owner.name, root, packages) : [];
   return dependencies.length > 0 ? dependencies : [owner.dir];
 }
 

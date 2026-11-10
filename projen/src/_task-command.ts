@@ -33,16 +33,6 @@ export function runTaskCommand(
   });
 }
 
-/** Async counterpart used by timeout-bound and concurrently scheduled tasks. */
-export async function runTaskCommandAsync(
-  cwd: string,
-  command: string,
-  args: readonly string[],
-  options: TaskCommandOptions & { readonly signal?: AbortSignal } = {},
-): Promise<void> {
-  await spawnTaskCommand(cwd, command, args, options);
-}
-
 /** Start one supervised task command and return its live process handle. */
 export function spawnTaskCommand(
   cwd: string,

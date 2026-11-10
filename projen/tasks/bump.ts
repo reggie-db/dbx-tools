@@ -9,7 +9,7 @@ import { log } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskRoot } from "./cli.ts";
 import { TaskRootOptionSchema } from "./options.ts";
-import { runTaskCommand } from "../src/_task-command.ts";
+import { runSynth } from "../src/scaffold.ts";
 import {
   resolveNextVersion,
   type VersionLevel,
@@ -46,8 +46,8 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   writeWorkspaceVersion(root, next.version);
 
   if (options.synth) {
-    runTaskCommand(root, process.execPath, [".projenrc.ts"]);
-    runTaskCommand(root, process.execPath, [".projenrc.ts"]);
+    runSynth({ root, post: true });
+    runSynth({ root, post: true });
   }
   logger.success(`workspace version synchronized at ${next.version}`);
 }

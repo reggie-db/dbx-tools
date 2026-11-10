@@ -365,14 +365,17 @@ export function workspaceDependencyNames(
 /**
  * Absolute directories for a workspace package and its transitive runtime
  * workspace dependencies. Dependency edges come from package manifests; external
- * packages are ignored. Returns `[]` when `packageName` is not a workspace member.
+ * packages are ignored. Callers that already loaded the package catalogue may pass
+ * it to avoid reading the workspace manifests again. Returns `[]` when
+ * `packageName` is not a workspace member.
  */
 export function workspaceDependencyDirectories(
   packageName: string,
   projectRoot: string = resolveRepoRoot(),
+  recorded: readonly RecordedPackage[] = recordedPackages(projectRoot),
 ): string[] {
   const packages = new Map<string, { dir: string; manifest: Readonly<Record<string, unknown>> }>();
-  for (const pkg of recordedPackages(projectRoot)) {
+  for (const pkg of recorded) {
     if (!pkg.name || !pkg.manifest) continue;
     packages.set(pkg.name, { dir: pkg.dir, manifest: pkg.manifest });
   }

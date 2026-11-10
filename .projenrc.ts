@@ -1575,7 +1575,6 @@ new projectPy.DBXToolsPythonWorkspace(root, {
   release: true,
 });
 root.testTask.spawn(root.tasks.tryFind("py:lint")!);
-root.tasks.tryFind("test:all")?.spawn(root.tasks.tryFind("py:test")!);
 root.addTask("graphiti:smoke:embedded", {
   exec: "cd packages/py/graphiti && uv run --extra dev python smoke/postgraph_restart.py",
   description: "Smoke-test the embedded PostGraph driver and restart persistence",

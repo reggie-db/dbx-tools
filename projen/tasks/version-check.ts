@@ -34,7 +34,10 @@ export async function main(): Promise<void> {
 
   check("package.json", manifestVersion(join(root, "package.json")));
   for (const pkg of recordedPackages(root)) {
-    check(`${pkg.path}/package.json`, manifestVersion(join(pkg.dir, "package.json")));
+    check(
+      `${pkg.path}/package.json`,
+      typeof pkg.manifest?.version === "string" ? pkg.manifest.version : undefined,
+    );
   }
 
   for await (const path of findFiles("**/pyproject.toml", { cwd: root })) {

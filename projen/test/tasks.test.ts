@@ -88,7 +88,10 @@ describe("workspace validation tasks", () => {
     }
     assert.equal(tasks.root.tasks["test:focused"]?.steps?.[0]?.receiveArgs, true);
     assert.equal(tasks.root.tasks["test:changed"]?.steps?.[0]?.receiveArgs, true);
-    assert.equal(tasks.root.tasks["test:all"]?.steps?.at(-1)?.spawn, "py:test");
+    assert.deepEqual(
+      tasks.root.tasks["test:all"]?.steps?.filter((step) => step.spawn === "py:test"),
+      [{ spawn: "py:test" }],
+    );
   });
 
   it("checks lint without mutating and exposes fixes explicitly", () => {

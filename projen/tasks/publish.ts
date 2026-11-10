@@ -47,11 +47,11 @@
  * error rather than something publication repairs. Local lockfiles are ignored
  * because configured registries can leak into them.
  */
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { relativePathWithin } from "@dbx-tools/core";
-import { log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
+import { isRecord, log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
 import {
@@ -65,19 +65,14 @@ import { publishNpmArchives } from "./publish-npm.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { applyPublishConfig, packNpmPackage } from "../src/npm-packaging.ts";
 import { readNpmArchiveIdentity } from "../src/npm-release.ts";
-import { recordedPackages } from "../src/packages.ts";
+import { recordedPackages, type RecordedPackage } from "../src/packages.ts";
 
 const logger = log.logger("projen:publish");
 const COMPILED_PUBLISH_PREFIX = "./lib/";
 
-/** Whether selected workspace members carry the reviewed workspace version. */
-function manifestsMatchVersion(members: readonly string[], version: string): boolean {
-  return members.every((dir) => {
-    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
-      version?: string;
-    };
-    return pkg.version === version;
-  });
+/** Whether selected workspace members carry readable manifests at the reviewed version. */
+function manifestsMatchVersion(members: readonly RecordedPackage[], version: string): boolean {
+  return members.every(({ manifest }) => manifest?.version === version);
 }
 
 /** Compiled files referenced by a publishConfig entry-point tree. */
@@ -151,11 +146,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   const excluded = new Set(options.exclude);
 
   const path = enrichedPath(root);
-  const allMembers = recordedPackages(root)
-    .map((pkg) => pkg.dir)
-    .filter((dir) => existsSync(join(dir, "package.json")))
-    .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));
-  const members = allMembers;
+  const members = recordedPackages(root).filter(
+    ({ path: packagePath }) => !excluded.has(packagePath),
+  );
 
   if (!manifestsMatchVersion(members, version)) {
     throw new Error(`workspace manifests do not match release ${version}; run projen`);
@@ -170,29 +163,30 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     compiledTargets: string[];
     access?: "public" | "restricted";
   }> = [];
-  for (const dir of members) {
-    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
-      name?: string;
-      version?: string;
-      private?: boolean;
-      publishConfig?: { access?: unknown };
-    };
-    if (pkg.private) {
-      logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
+  for (const member of members) {
+    const { dir, manifest } = member;
+    if (!manifest) {
+      throw new Error(`Missing package manifest for ${member.path}`);
+    }
+    const name = member.name ?? dirname(dir);
+    if (manifest.private === true) {
+      logger.info(`skip private ${name}`);
       continue;
     }
-    if (!pkg.version) throw new Error(`Missing package version for ${pkg.name ?? dirname(dir)}`);
-    const access = pkg.publishConfig?.access;
-    if (access !== undefined && access !== "public" && access !== "restricted") {
-      throw new Error(
-        `${pkg.name ?? dirname(dir)} has invalid publishConfig.access ${String(access)}`,
-      );
+    const packageVersion = manifest.version;
+    if (typeof packageVersion !== "string") {
+      throw new Error(`Missing package version for ${name}`);
     }
-    const compiledTargets = [...sequence(compiledPublishTargets(pkg.publishConfig)).distinct()];
+    const publishConfig = isRecord(manifest.publishConfig) ? manifest.publishConfig : undefined;
+    const access = publishConfig?.access;
+    if (access !== undefined && access !== "public" && access !== "restricted") {
+      throw new Error(`${name} has invalid publishConfig.access ${String(access)}`);
+    }
+    const compiledTargets = [...sequence(compiledPublishTargets(publishConfig)).distinct()];
     publishable.push({
       dir,
-      name: pkg.name ?? dirname(dir),
-      version: pkg.version,
+      name,
+      version: packageVersion,
       compile: compiledTargets.length > 0,
       compiledTargets,
       ...(access ? { access } : {}),

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 /** Generate package barrels once or keep affected barrels current in watch mode. */
 import { relativePathWithin } from "@dbx-tools/core";
-import { log, type Sequence, sequence, pluralize } from "@dbx-tools/shared-core";
+import { log, sequence, pluralize } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
 import { TaskDirectoriesOptionSchema, TaskWatchOptionSchema } from "./options.ts";
@@ -19,12 +19,14 @@ function ownerPackageDir(
   return packages.find(({ dir }) => relativePathWithin(dir, abs) !== undefined)?.dir;
 }
 
-function changedBarrelTargets(changed: readonly string[]): Sequence<string> {
+function changedBarrelTargets(changed: readonly string[]): string[] {
   const packages = recordedPackages();
-  return sequence(changed)
-    .map((path) => ownerPackageDir(path, packages))
-    .nonNull()
-    .distinct();
+  return [
+    ...sequence(changed)
+      .map((path) => ownerPackageDir(path, packages))
+      .nonNull()
+      .distinct(),
+  ];
 }
 
 function warnUnownedChanges(changed: readonly string[]): void {
@@ -53,6 +55,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   );
 
   if (values.watch) {
+    let prepared: string[] | undefined;
     // Watch the package roots; a source edit inside a package rebuilds just that
     // package's `index.ts` barrel (no re-synth - the projenrc watcher owns that).
     // watchLoop already drops generated paths, so a barrel write never re-triggers us.
@@ -60,15 +63,17 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       "barrels",
       watchRoots(),
       (changed) => {
-        const n = generateBarrels({ dirs: [...changedBarrelTargets(changed)] });
+        const targets = prepared ?? changedBarrelTargets(changed);
+        prepared = undefined;
+        const n = generateBarrels({ dirs: targets });
         if (n) logger.success(`rebuilt ${pluralize(n, "barrel")}`);
       },
       {
         check: (changed) => {
-          const targets = changedBarrelTargets(changed);
+          prepared = changedBarrelTargets(changed);
           // A change under a package root that no recorded package owns is a new
           // folder: only a re-synth can create its barrel, so this watcher skips.
-          if (!targets.some(() => true)) {
+          if (prepared.length === 0) {
             warnUnownedChanges(changed);
             return false;
           }

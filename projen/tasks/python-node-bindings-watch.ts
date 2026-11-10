@@ -60,6 +60,7 @@ function selection(
 /** Generate once, then rebuild only bridges affected by each debounced change batch. */
 export async function main(): Promise<void> {
   let configs = resolveAllPythonNodeBindings(repoRoot);
+  let prepared: ReturnType<typeof selection> | undefined;
   await withWorkspaceMutationLock(repoRoot, () => generatePythonNodeBindings(repoRoot));
   logger.success("generated all Python Node bindings");
 
@@ -67,7 +68,8 @@ export async function main(): Promise<void> {
     "python-node-bindings",
     watchPaths(configs),
     (changed) => {
-      const next = selection(configs, changed);
+      const next = prepared ?? selection(configs, changed);
+      prepared = undefined;
       configs = next.configs;
       if (next.all) {
         generatePythonNodeBindings(repoRoot);
@@ -85,8 +87,8 @@ export async function main(): Promise<void> {
     },
     {
       check: (changed) => {
-        const next = selection(configs, changed);
-        return next.all || next.projects.length > 0;
+        prepared = selection(configs, changed);
+        return prepared.all || prepared.projects.length > 0;
       },
     },
   );

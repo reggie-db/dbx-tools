@@ -85,19 +85,23 @@ function integrationTest(path: string): boolean {
   );
 }
 
-function packageForPath(graph: WorkspaceGraph, path: string): WorkspaceGraphPackage | undefined {
+function packageForPath(
+  packagesByPath: readonly WorkspaceGraphPackage[],
+  path: string,
+): WorkspaceGraphPackage | undefined {
   const normalized = toPosix(path);
-  return [...graph.packages]
-    .sort((left, right) => right.path.length - left.path.length)
-    .find((pkg) => normalized === pkg.path || normalized.startsWith(`${pkg.path}/`));
+  return packagesByPath.find(
+    (pkg) => normalized === pkg.path || normalized.startsWith(`${pkg.path}/`),
+  );
 }
 
 function affectedPackages(graph: WorkspaceGraph, changed: readonly string[]): Set<string> | "all" {
   const byName = new Map(graph.packages.map((pkg) => [pkg.name, pkg]));
+  const byPath = [...graph.packages].sort((left, right) => right.path.length - left.path.length);
   const affected = new Set<string>();
   const pending: string[] = [];
   for (const path of changed) {
-    const pkg = packageForPath(graph, path);
+    const pkg = packageForPath(byPath, path);
     if (!pkg) return "all";
     if (!affected.has(pkg.name)) pending.push(pkg.name);
   }
@@ -160,9 +164,13 @@ function selectedTests(
   } else {
     if (selections.length === 0) throw new Error("test:focused requires a package name or path");
     names = new Set<string>();
+    const packagesByPath = [...graph.packages].sort(
+      (left, right) => right.path.length - left.path.length,
+    );
     for (const value of selections) {
       const direct = graph.packages.find((pkg) => pkg.name === value);
-      const byPath = direct ?? packageForPath(graph, toPosix(relative(root, resolve(root, value))));
+      const byPath =
+        direct ?? packageForPath(packagesByPath, toPosix(relative(root, resolve(root, value))));
       if (!byPath) throw new Error(`Unknown workspace package or path: ${value}`);
       names.add(byPath.name);
     }

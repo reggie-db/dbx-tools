@@ -26,10 +26,11 @@ import { repoRoot } from "./packages.ts";
  * bootstrapping an empty folder) runs with `post: false` and does its own install
  * afterward instead.
  */
-export function runSynth(options: { post?: boolean } = {}): void {
+export function runSynth(options: { post?: boolean; root?: string } = {}): void {
+  const root = options.root ?? repoRoot;
   const env = { ...process.env };
   if (options.post) delete env.PROJEN_DISABLE_POST;
   else env.PROJEN_DISABLE_POST = "true";
-  const projenrc = join(repoRoot, ".projenrc.ts");
-  runTaskCommand(repoRoot, process.execPath, [projenrc], { env });
+  const projenrc = join(root, ".projenrc.ts");
+  runTaskCommand(root, process.execPath, [projenrc], { env });
 }

@@ -720,9 +720,6 @@
         },
         {
           "spawn": "py:test"
-        },
-        {
-          "spawn": "py:test"
         }
       ]
     },
