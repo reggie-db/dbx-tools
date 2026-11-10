@@ -6,6 +6,7 @@
 
 import { policy } from "@dbx-tools/model";
 import { isRecord } from "@dbx-tools/shared-core";
+import type express from "express";
 import type {
   GatewayRoute,
   ModelTarget,
@@ -111,9 +112,11 @@ export function requestedFeatures(body: Readonly<Record<string, unknown>>): Requ
   };
 }
 
-/** Return whether an Originator header selects Codex compatibility behavior. */
-export function isCodexOriginator(originator: string | undefined): boolean {
-  return originator?.toLowerCase().includes("codex") === true;
+/** Return whether a request selects Codex compatibility behavior. */
+export function isCodexRequest(request: express.Request): boolean {
+  if (request.header("originator")?.toLowerCase().includes("codex") === true) return true;
+  const clientVersion = request.query.client_version;
+  return typeof clientVersion === "string" && clientVersion.trim().length > 0;
 }
 
 function directRoute(

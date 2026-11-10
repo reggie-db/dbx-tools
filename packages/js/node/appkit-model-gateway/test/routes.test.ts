@@ -36,7 +36,26 @@ describe("model gateway Express lifecycle", () => {
       response as unknown as express.Response,
     );
 
-    assert.deepEqual(calls, [[undefined, undefined, "foundation", true]]);
+    assert.deepEqual(calls, [[false, undefined, "foundation", true]]);
+  });
+
+  it("selects the Codex catalogue for a nonblank client_version", async () => {
+    const calls: unknown[][] = [];
+    const gateway = {
+      async models(...args: unknown[]) {
+        calls.push(args);
+        return { models: [] };
+      },
+    } as unknown as ModelGateway;
+    const response = new MockResponse();
+
+    await sendModels(
+      gateway,
+      new MockRequest({ client_version: "0.1.0" }) as unknown as express.Request,
+      response as unknown as express.Response,
+    );
+
+    assert.deepEqual(calls, [[true, undefined, "foundation", false]]);
   });
 
   it("aborts the upstream request when the client disconnects", async () => {

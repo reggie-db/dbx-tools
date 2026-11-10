@@ -50,7 +50,7 @@ import {
   type ModelRegistry,
   type ModelRegistryOptions,
 } from "./registry.ts";
-import { isCodexOriginator, requestedFeatures, resolveRoute } from "./router.ts";
+import { requestedFeatures, resolveRoute } from "./router.ts";
 import {
   SmartModelRouter,
   type SmartRouterService,
@@ -150,12 +150,11 @@ export class ModelGateway {
 
   /** Return the live OpenAI model list, including Codex metadata when requested. */
   async models(
-    originator?: string,
+    codex = false,
     search?: string,
     modelSource: ModelSource | "all" = "foundation",
     includeMetadata = false,
   ): Promise<ModelListResponse> {
-    const codex = isCodexOriginator(originator);
     logger.debug("listing models", { codex, search });
     const query = search?.trim();
     const smartRouterSearch =

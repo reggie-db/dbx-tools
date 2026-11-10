@@ -32,7 +32,7 @@ export { adaptInferenceReasoning, learnAndAdaptReasoningRetry } from "./src/reas
 export type { AdaptedInferenceBody } from "./src/reasoning-adapt.ts";
 export { DatabricksModelRegistry } from "./src/registry.ts";
 export type { ModelRegistryResolveOptions, ModelRegistry, ModelRegistryOptions } from "./src/registry.ts";
-export { UnsupportedGatewayFeatureError, resolveRoute, requestedFeatures, isCodexOriginator } from "./src/router.ts";
+export { UnsupportedGatewayFeatureError, resolveRoute, requestedFeatures, isCodexRequest } from "./src/router.ts";
 export { sendHealth, sendModels, sendInference } from "./src/routes.ts";
 export { SMART_ROUTER_DEFAULT_SETTINGS, SmartRouterProbeRecordSchema, SmartRouterError, AppKitSmartRouterStore, AppKitSmartRouterProbeStore, SmartRouterService, smartRouterCandidates, SmartRouterContextBuilder, SmartModelRouter, smartRouterTurnKey } from "./src/smart-router.ts";
 export type { SmartRouterSettings, SmartRouterCandidate, SmartRouterSelection, SmartRouterStore, SmartRouterProbeRecord, SmartRouterProbeStore, SmartRouterResult, SmartRouterContext, SmartRouterSelectOptions } from "./src/smart-router.ts";

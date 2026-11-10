@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type express from "express";
 import type {
   ModelCapabilities,
   ModelTarget,
   RequestedFeatures,
 } from "@dbx-tools/shared-model-gateway";
 import {
-  isCodexOriginator,
+  isCodexRequest,
   requestedFeatures,
   resolveRoute,
   UnsupportedGatewayFeatureError,
@@ -46,9 +47,11 @@ const NO_FEATURES: RequestedFeatures = {
 };
 
 describe("model gateway routing", () => {
-  it("detects Codex anywhere in Originator without case sensitivity", () => {
-    assert.equal(isCodexOriginator("OpenAI-CoDeX-CLI"), true);
-    assert.equal(isCodexOriginator("openai-cli"), false);
+  it("detects Codex requests from Originator before client_version", () => {
+    assert.equal(isCodexRequest(request({ originator: "OpenAI-CoDeX-CLI" })), true);
+    assert.equal(isCodexRequest(request({ originator: "openai-cli" })), false);
+    assert.equal(isCodexRequest(request({}, { client_version: "0.1.0" })), true);
+    assert.equal(isCodexRequest(request({}, { client_version: "  " })), false);
   });
 
   it("uses the Unity Gateway Codex fast path for model-service slugs", () => {
@@ -251,6 +254,18 @@ describe("model gateway routing", () => {
     );
   });
 });
+
+function request(
+  headers: Readonly<Record<string, string>> = {},
+  query: Readonly<Record<string, unknown>> = {},
+): express.Request {
+  return {
+    header(name: string): string | undefined {
+      return headers[name.toLowerCase()];
+    },
+    query,
+  } as express.Request;
+}
 
 function fixtureTarget(capabilities: Partial<ModelCapabilities>, family = "gpt"): ModelTarget {
   return {

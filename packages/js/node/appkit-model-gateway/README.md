@@ -161,9 +161,10 @@ discovered value.
 
 ## Configure Codex
 
-`GET /v1/models` includes Codex metadata when the request carries
-`Originator: codex`. Codex slugs prefer fully qualified Databricks model service
-names.
+`GET /v1/models` includes Codex metadata when the request carries an
+`Originator` header containing `codex` (case-insensitive), or a nonblank
+`client_version` query parameter. Codex slugs prefer fully qualified Databricks
+model service names.
 
 Add `metadata=true` to either the standard or Codex request to include the
 optional dbx-tools metadata object on each model. Its latency and rating fields

@@ -40,7 +40,7 @@ describe("ModelGateway model discovery", () => {
     };
     const gateway = new ModelGateway({ smartRouter: "false" }, registry);
 
-    const response = await gateway.models(undefined, "gte large");
+    const response = await gateway.models(false, "gte large");
 
     assert.deepEqual(calls, ["gte large"]);
     assert.equal("data" in response ? response.data[0]?.id : undefined, target.id);
@@ -68,7 +68,7 @@ describe("ModelGateway model discovery", () => {
     const gateway = new ModelGateway({ smartRouterService: service }, registry);
 
     const standard = await gateway.models();
-    const codex = await gateway.models("codex_cli_rs");
+    const codex = await gateway.models(true);
 
     assert.equal("data" in standard ? standard.data[0]?.id : undefined, "smart-router");
     assert.equal("models" in codex ? codex.models[0]?.slug : undefined, "databricks/smart-router");

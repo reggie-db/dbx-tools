@@ -12,7 +12,7 @@ import type express from "express";
 
 import { AiDecideRouterError } from "./ai-decide.ts";
 import { ModelGateway, ModelGatewayError } from "./gateway.ts";
-import { UnsupportedGatewayFeatureError } from "./router.ts";
+import { isCodexRequest, UnsupportedGatewayFeatureError } from "./router.ts";
 import { SmartRouterError } from "./smart-router.ts";
 
 const logger = log.logger("appkit/model-gateway/http");
@@ -32,7 +32,7 @@ export async function sendModels(
   logger.debug("models request", requestContext(request));
   try {
     const payload = await gateway.models(
-      request.header("originator"),
+      isCodexRequest(request),
       optionalSearch(request.query.search),
       optionalModelSource(request.query.model_source ?? request.query.modelSource),
       optionalBoolean(request.query.metadata, "metadata"),
