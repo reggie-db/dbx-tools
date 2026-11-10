@@ -67,7 +67,7 @@ export { applyPublishConfig, packNpmPackage } from "./src/npm-packaging.ts";
 export type { NpmArchiveManifestTransform } from "./src/npm-packaging.ts";
 export { npmReleaseMatches, publishedNpmRelease, isNpmStagedVersionConflict, waitForMatchingNpmRelease, publishNpmArchive, readNpmArchiveManifest, readNpmArchiveIdentity, npmArchiveContentDigest } from "./src/npm-release.ts";
 export type { NpmReleaseIdentity, NpmArchiveManifest, NpmPublishOutcome } from "./src/npm-release.ts";
-export { resolveRepoRoot, repoRoot, DEFAULT_PACKAGE_ROOTS, projectName, toPosix, isGeneratedFile, isModuleFile, DiscoveredPackage, scanPackages, readPackageManifest, readDbxToolsConfig, syncResynthPaths, syncWatchTasks, recordedPackages, workspaceDependencyNames, workspaceDependencyDirectories, recordedRoots } from "./src/packages.ts";
+export { resolveRepoRoot, repoRoot, DEFAULT_PACKAGE_ROOTS, projectName, toPosix, isGeneratedFile, isModuleFile, packageDirOfModule, DiscoveredPackage, scanPackages, readPackageManifest, readDbxToolsConfig, syncResynthPaths, syncWatchTasks, recordedPackages, workspaceDependencyNames, workspaceDependencyDirectories, recordedRoots } from "./src/packages.ts";
 export type { RecordedPackage, WorkspaceDependencyOptions } from "./src/packages.ts";
 export { PnpmWorkspaceState } from "./src/pnpm-workspace.ts";
 export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace.ts";

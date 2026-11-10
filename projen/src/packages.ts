@@ -25,7 +25,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import { projectUtils, relativePathWithin } from "@dbx-tools/core";
 import { findFilesSync } from "@dbx-tools/path";
 import { parseRecord, isRecord, toSlug, parseList } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
@@ -103,6 +103,21 @@ export function isModuleFile(file: string): boolean {
   if (BARREL_RE.test(base)) return false;
   if (/\.(test|spec)\./.test(base)) return false;
   return true;
+}
+
+/**
+ * Return the package directory implied by a module beneath `rootDir`'s first
+ * `src/` segment. Returns `undefined` for non-modules, paths outside the root,
+ * and modules directly under a root-level `src/`.
+ */
+export function packageDirOfModule(rootDir: string, file: string): string | undefined {
+  if (!isModuleFile(file)) return undefined;
+  const rel = relativePathWithin(rootDir, resolve(rootDir, file));
+  if (rel === undefined) return undefined;
+  const segments = toPosix(rel).split("/");
+  const srcIndex = segments.indexOf("src");
+  if (srcIndex <= 0) return undefined;
+  return resolve(rootDir, ...segments.slice(0, srcIndex));
 }
 
 /**
@@ -191,10 +206,8 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
   for (const file of findFilesSync(SRC_MODULE_GLOB, { cwd: rootAbs })) {
-    if (!isModuleFile(file)) continue;
-    const segs = toPosix(file).split("/");
-    const srcIdx = segs.indexOf("src");
-    if (srcIdx > 0) owners.add(segs.slice(0, srcIdx).join("/"));
+    const owner = packageDirOfModule(rootAbs, file);
+    if (owner) owners.add(toPosix(relative(rootAbs, owner)));
   }
   const rels = [...owners];
   // Outermost wins: drop any owner nested under another discovered owner.
@@ -393,9 +406,10 @@ export function workspaceDependencyDirectories(
 }
 
 /**
- * The configured package roots plus the first segment of every recorded member.
- * The member union includes self-synthesizing extra workspace members; older
- * manifests without configured roots fall back to {@link DEFAULT_PACKAGE_ROOTS}.
+ * The configured package roots plus every recorded member outside those roots.
+ * Exact extra-member paths keep a nested member such as `packages/demo` from
+ * broadening the watch boundary to unrelated siblings under `packages/`.
+ * Older manifests without configured roots fall back to {@link DEFAULT_PACKAGE_ROOTS}.
  */
 export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[] {
   const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
@@ -406,7 +420,7 @@ export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[]
   for (const member of readRecordedMembers(projectRoot)) {
     if (configuredRoots.some((root) => member === root || member.startsWith(`${root}/`))) continue;
     const pkg = packageOfMember(projectRoot, member);
-    if (pkg) roots.add(pkg.root);
+    if (pkg) roots.add(pkg.memberPath);
   }
   return [...roots];
 }

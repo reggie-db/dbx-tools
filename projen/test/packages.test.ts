@@ -32,7 +32,7 @@ describe("recordedRoots", () => {
       name: "fixture",
       outdir,
       packageRoots: ["packages/js"],
-      extraWorkspaceMembers: ["tooling"],
+      extraWorkspaceMembers: ["packages/demo", "tooling"],
       defaultTagMixins: false,
       github: false,
     });
@@ -43,7 +43,7 @@ describe("recordedRoots", () => {
       dbxToolsConfig?: { packageRoots?: string[] };
     };
     assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
-    assert.deepEqual(recordedRoots(outdir), ["packages/js", "tooling"]);
+    assert.deepEqual(recordedRoots(outdir), ["packages/js", "packages/demo", "tooling"]);
   });
 
   it("prefers packages/js when the conventional JavaScript root exists", () => {

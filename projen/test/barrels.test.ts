@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { folderBarrelFile, generateBarrels } from "../src/barrels.ts";
+import { planBarrelChanges } from "../tasks/barrels.ts";
 
 function fixturePackage(name: string): string {
   const directory = join(mkdtempSync(join(tmpdir(), "dbx-tools-barrels-")), name);
@@ -29,6 +30,34 @@ function barrelStat(directory: string, file = "index.ts"): [number, number, numb
   const stat = statSync(join(directory, file));
   return [stat.mode & 0o777, stat.mtimeMs, stat.ctimeMs];
 }
+
+describe("planBarrelChanges", () => {
+  it("classifies only source-bearing unrecorded packages as actionable", () => {
+    const workspace = join(tmpdir(), "workspace");
+    const packageRoot = join(workspace, "packages", "js");
+    const existing = join(packageRoot, "existing");
+    const newPackage = join(packageRoot, "new-package");
+    const readme = join(packageRoot, "README.md");
+
+    assert.deepEqual(
+      planBarrelChanges(
+        [
+          join(existing, "src", "existing.ts"),
+          join(newPackage, "src", "new.ts"),
+          join(newPackage, "src", "index.ts"),
+          readme,
+        ],
+        [{ dir: existing }],
+        [packageRoot],
+      ),
+      {
+        targets: [existing],
+        unrecordedPackages: [newPackage],
+        ignored: [join(newPackage, "src", "index.ts"), readme],
+      },
+    );
+  });
+});
 
 describe("generateBarrels", () => {
   it("keeps a metadata-only root barrel for an empty source tree", () => {
