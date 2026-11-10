@@ -160,6 +160,42 @@ describe("ModelGateway model discovery", () => {
   });
 });
 
+describe("ModelGateway inference resolution", () => {
+  it("does not eagerly list the catalogue before resolving a concrete model", async () => {
+    let lists = 0;
+    let resolutions = 0;
+    const registry: ModelRegistry = {
+      async list() {
+        lists += 1;
+        return [];
+      },
+      async search() {
+        return [];
+      },
+      async resolve() {
+        resolutions += 1;
+        throw new Error("stop after resolution");
+      },
+      async refresh() {},
+    };
+    const gateway = new ModelGateway({ smartRouter: "false" }, registry);
+
+    await assert.rejects(
+      () =>
+        gateway.inference(
+          "openai-responses",
+          { model: "databricks-gpt-5-6-sol", input: "hello" },
+          new Headers(),
+          new AbortController().signal,
+        ),
+      /stop after resolution/,
+    );
+
+    assert.equal(lists, 0);
+    assert.equal(resolutions, 1);
+  });
+});
+
 describe("ModelGateway request sanitization", () => {
   it("selects by explicit model, class header, configured default, or empty best-chat input", () => {
     assert.deepEqual(gatewayModelSelection({}, new Headers()), {});

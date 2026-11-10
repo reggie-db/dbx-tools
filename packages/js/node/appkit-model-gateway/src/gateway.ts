@@ -262,11 +262,12 @@ export class ModelGateway {
     if (selection.smartRouter && !smartRouter) {
       throw new ModelGatewayError(404, "Databricks Smart Router is disabled");
     }
-    const registryTargets = smartRouter ? undefined : await this.registry.list();
+    const aiDecideTargets =
+      !smartRouter && selection.aiDecide ? await this.registry.list() : undefined;
     const aiDecide = selection.aiDecide
       ? await this.aiDecide.select(
           sanitizedBody,
-          (registryTargets ?? [])
+          (aiDecideTargets ?? [])
             .map((candidate) => candidate.endpoint)
             .filter((endpoint): endpoint is ServingEndpointSummary => endpoint !== undefined),
           this.primaryProfile?.client,
@@ -283,7 +284,7 @@ export class ModelGateway {
     const target =
       smartRouter?.target ??
       (aiDecide
-        ? registryTargets?.find((candidate) => candidate.id === aiDecide.endpoint.name)
+        ? aiDecideTargets?.find((candidate) => candidate.id === aiDecide.endpoint.name)
         : undefined) ??
       (await this.registry.resolve(selection.model, {
         ...(protocol === "openai-embeddings" ? { modelClass: ModelClass.Embedding } : {}),
