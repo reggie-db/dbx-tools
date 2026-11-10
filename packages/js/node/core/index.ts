@@ -26,7 +26,7 @@ export { COMMAND_NOT_FOUND_EXIT_CODE, onParentTerminationSignal, shutdownProcess
 export type { ExecStdio, LineHandler, LineOutputOptions, StdioOption, ExecResult, ChildProcessResult, ChildProcessTerminationOptions, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
 export { withFileLock, acquireFileLock } from "./src/file-lock.ts";
 export type { FileLockBackend, FileLockAcquisition, FileLockOptions, FileLockLease } from "./src/file-lock.ts";
-export { statSync, cachedRecord } from "./src/file.ts";
+export { relativePathWithin, statSync, cachedRecord } from "./src/file.ts";
 export { withProcessLock, processLockWorkerOptions, attachProcessLock, processLockAttached } from "./src/process-lock.ts";
 export { resolveWorkingDirectory, root, parseGitRemote, resolveProjectRoots, parseProjectGhRemote, resolveProjectGhAccount, repositoryUrl, npmRegistry } from "./src/project-utils.ts";
 export type { ProjectContext, ProjectGhRemote, ProjectGhAccount, ResolveProjectGhAccountOptions, NpmRegistryOptions } from "./src/project-utils.ts";

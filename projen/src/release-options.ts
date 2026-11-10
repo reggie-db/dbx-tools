@@ -38,12 +38,8 @@ export const ReleaseStepSelectionSchema = z
 export type ReleaseStepSelection = z.infer<typeof ReleaseStepSelectionSchema>;
 
 /** Flags consumed by the shared release-selection policy. */
-export interface ReleaseSelectionOptions {
+export interface ReleaseSelectionOptions extends Partial<ReleaseStepSelection> {
   readonly publish?: ReleasePublishTarget;
-  readonly npm?: boolean;
-  readonly pypi?: boolean;
-  readonly docs?: boolean;
-  readonly validation?: boolean;
 }
 
 const ANNOTATION_MARKER = "dbx-tools-release:";

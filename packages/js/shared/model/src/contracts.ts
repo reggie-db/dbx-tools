@@ -463,23 +463,11 @@ export const ResolvedModelSchema = z
 
 export type ResolvedModel = z.infer<typeof ResolvedModelSchema>;
 
-export const ResolveModelOptionsSchema = z
-  .object({
-    threshold: z
-      .number()
-      .min(0)
-      .max(1)
-      .optional()
-      .describe("Minimum fuzzy-match score in the range 0 to 1."),
-    requiresTools: z
-      .boolean()
-      .optional()
-      .describe("When true, only tool-capable endpoints may match."),
-    modelSource: ModelSourceSchema.optional().describe(
-      "Restrict fuzzy matches to Databricks foundation models or custom deployments.",
-    ),
-  })
-  .describe("Pure controls for fuzzy endpoint resolution.");
+export const ResolveModelOptionsSchema = ModelQuerySchema.pick({
+  threshold: true,
+  requiresTools: true,
+  modelSource: true,
+}).describe("Pure controls for fuzzy endpoint resolution.");
 
 export type ResolveModelOptions = z.infer<typeof ResolveModelOptionsSchema>;
 
@@ -492,36 +480,20 @@ export const ScoredEndpointSchema = z
 
 export type ScoredEndpoint = z.infer<typeof ScoredEndpointSchema>;
 
-export const ResolveModelInputSchema = z
-  .object({
+export const ResolveModelInputSchema = ModelQuerySchema.pick({
+  threshold: true,
+  requiresTools: true,
+  requiresStructuredOutput: true,
+  optimizeFor: true,
+  modelSource: true,
+  modelClass: true,
+})
+  .extend({
     explicit: z
       .string()
       .optional()
       .describe("Exact model id or display name supplied by the caller."),
     fuzzy: z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
-    threshold: z
-      .number()
-      .min(0)
-      .max(1)
-      .optional()
-      .describe("Minimum fuzzy-match score in the range 0 to 1."),
-    requiresTools: z
-      .boolean()
-      .optional()
-      .describe("When true, only tool-capable endpoints may be selected."),
-    requiresStructuredOutput: z
-      .boolean()
-      .optional()
-      .describe("When true, only structured-output-capable endpoints may be selected."),
-    optimizeFor: ModelOptimizationSchema.optional().describe(
-      "Prefer endpoint quality, speed, or cost within the eligible model classes.",
-    ),
-    modelSource: ModelSourceSchema.optional().describe(
-      "Restrict selection to Databricks foundation models or custom deployments.",
-    ),
-    modelClass: ModelClassSchema.optional().describe(
-      "Preferred intent-oriented class when no explicit model matches.",
-    ),
     fallbacks: z
       .array(z.string())
       .optional()

@@ -85,12 +85,7 @@ export type SmartRouterRequest = z.infer<typeof SmartRouterRequestSchema>;
 /** One selected route returned by Databricks routes:select. */
 export const SmartRouterRouteSelectionSchema = z
   .object({
-    route_option: z
-      .object({
-        model: z.string().trim().min(1),
-        harness: SmartRouterHarnessSchema.optional(),
-      })
-      .passthrough(),
+    route_option: SmartRouterRouteOptionSchema.partial({ harness: true }).passthrough(),
     params: z
       .record(z.string(), z.unknown())
       .optional()

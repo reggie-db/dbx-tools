@@ -49,7 +49,8 @@
  */
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { relativePathWithin } from "@dbx-tools/core";
 import { log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
@@ -114,8 +115,7 @@ function enrichedPath(root: string): string {
 function outputDirectory(root: string, value: string | undefined): string | undefined {
   if (!value) return undefined;
   const output = resolve(root, value);
-  const path = relative(root, output);
-  if (!path || path.startsWith("..") || isAbsolute(path)) {
+  if (!relativePathWithin(root, output)) {
     throw new Error("--output must be a non-root directory inside the workspace");
   }
   return output;

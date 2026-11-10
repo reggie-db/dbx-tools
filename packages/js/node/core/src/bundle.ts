@@ -10,9 +10,10 @@
  */
 
 import { opendir, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parseRecord, isRecord, optional, trimToNull } from "@dbx-tools/shared-core";
 import { spawn } from "./exec.ts";
+import { relativePathWithin } from "./file.ts";
 import { resolveWorkingDirectory, root } from "./project-utils.ts";
 
 const BUNDLE_FILE_NAMES = new Set(["databricks.yml", "databricks.yaml"]);
@@ -61,7 +62,7 @@ export async function* appResources(
 ): AsyncGenerator<AppResource, void, void> {
   const boundary = await resolveDirectory(projectBoundary);
   const startDirectory = await resolveStartDirectory(cwd);
-  if (!boundary || !startDirectory || !isWithinOrEqual(startDirectory, boundary)) {
+  if (!boundary || !startDirectory || relativePathWithin(boundary, startDirectory) === undefined) {
     return;
   }
 
@@ -113,7 +114,7 @@ async function* bundlePaths(
 ): AsyncGenerator<string, void, void> {
   const seen = new Set<string>();
   let current = startDirectory;
-  while (isWithinOrEqual(current, boundary)) {
+  while (relativePathWithin(boundary, current) !== undefined) {
     for (const filename of BUNDLE_FILE_NAMES) {
       const candidate = join(current, filename);
       if (!(await isFile(candidate))) continue;
@@ -200,11 +201,6 @@ async function isFile(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function isWithinOrEqual(candidate: string, parent: string): boolean {
-  const path = relative(parent, candidate);
-  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
 }
 
 async function main(): Promise<void> {

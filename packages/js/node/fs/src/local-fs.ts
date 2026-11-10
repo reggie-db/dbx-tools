@@ -22,7 +22,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { withFileLock } from "@dbx-tools/core";
+import { relativePathWithin, withFileLock } from "@dbx-tools/core";
 import { fnvHash, id } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
@@ -166,7 +166,7 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
     if (!this.contained) return resolvedPath;
     try {
       const real = await realpath(resolvedPath);
-      if (!isWithinHostRoot(this.realRoot, real)) {
+      if (relativePathWithin(this.realRoot, real) === undefined) {
         throw new FileSystemError(
           "PERMISSION_DENIED",
           "Path escapes the filesystem root",
@@ -181,7 +181,7 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
         while (cursor !== path.dirname(cursor)) {
           try {
             const real = await realpath(cursor);
-            if (!isWithinHostRoot(this.realRoot, real)) {
+            if (relativePathWithin(this.realRoot, real) === undefined) {
               throw new FileSystemError(
                 "PERMISSION_DENIED",
                 "Path escapes the filesystem root",
@@ -309,11 +309,6 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
 }
 
 /* ------------------------------ helpers ------------------------------ */
-
-function isWithinHostRoot(root: string, candidate: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
 
 function isErrno(err: unknown, code: string): boolean {
   return (

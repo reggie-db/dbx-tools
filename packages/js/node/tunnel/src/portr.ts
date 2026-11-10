@@ -37,15 +37,6 @@ export interface PortrInstallOptions {
   homeDir?: string;
 }
 
-/** Resolved portr wiring, or `undefined` when no tunnel is configured. */
-export interface PortrConfig {
-  subdomain: string;
-  server: string;
-  sshUrl: string;
-  token: string;
-  port: number;
-}
-
 export const PortrOptionsSchema = z
   .object({
     publicDomain: z.string().trim().min(1).optional().describe("Public tunnel domain."),
@@ -58,6 +49,17 @@ export const PortrOptionsSchema = z
   .describe("Portr tunnel resolution options.");
 
 export type PortrOptions = z.input<typeof PortrOptionsSchema>;
+
+/** Resolved control endpoint and credentials derived from Portr options. */
+export const PortrConfigSchema = PortrOptionsSchema.omit({ publicDomain: true })
+  .required()
+  .extend({
+    server: PortrOptionsSchema.shape.publicDomain.unwrap().describe("Portr control host."),
+  })
+  .describe("Resolved Portr tunnel configuration.");
+
+/** Resolved portr wiring, or `undefined` when no tunnel is configured. */
+export type PortrConfig = z.output<typeof PortrConfigSchema>;
 
 /**
  * Resolve portr config from `TUNNEL_PUBLIC_DOMAIN` + `PORTR_TOKEN`, or an

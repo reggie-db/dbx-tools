@@ -33,7 +33,7 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import {
   log,
@@ -52,7 +52,7 @@ import {
 } from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { cachedRecord, statSync } from "./file.ts";
+import { cachedRecord, relativePathWithin, statSync } from "./file.ts";
 import { resolveWorkingDirectory, root as resolveProjectRoot } from "./project-utils.ts";
 
 const logger = log.logger("config");
@@ -599,15 +599,7 @@ function findConfigFile(cwd: string, names: readonly string[]): string | undefin
   const key = JSON.stringify([start, ...names]);
   if (configFileCache.has(key)) return configFileCache.get(key);
   const root = resolveProjectRoot(start);
-  const pathFromRoot = root ? relative(root, start) : undefined;
-  const boundary =
-    root &&
-    pathFromRoot !== undefined &&
-    !isAbsolute(pathFromRoot) &&
-    pathFromRoot !== ".." &&
-    !pathFromRoot.startsWith(`..${sep}`)
-      ? root
-      : undefined;
+  const boundary = root && relativePathWithin(root, start) !== undefined ? root : undefined;
   for (let dir = start; ; dir = dirname(dir)) {
     for (const name of names) {
       const path = resolve(dir, name);

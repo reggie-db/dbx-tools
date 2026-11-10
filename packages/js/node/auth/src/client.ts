@@ -1,5 +1,6 @@
 import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth";
 import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
+import { z } from "zod";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./_databricks-cli.ts";
 import { AuthError } from "./_errors.ts";
 import { publicToken, TokenLifecycle } from "./_lifecycle.ts";
@@ -8,7 +9,7 @@ import { DatabricksPersonalAccessTokenProvider } from "./_personal-access-token.
 import { machineScopes, resolveConfigFile, resolveDatabricksProfile } from "./_profile-config.ts";
 import { DatabricksServicePrincipalProvider } from "./_service-principal.ts";
 import { MemoryCredentialStore } from "./_storage.ts";
-import { type DatabricksProfile, type Token, type TokenProvider } from "./_types.ts";
+import { type DatabricksProfile, type Token, type TokenProvider, TokenSchema } from "./_types.ts";
 import {
   AUTH_DEFAULTS,
   type DatabricksAuthOptions,
@@ -19,13 +20,11 @@ import { _databricksRuntimeAuthClient, createDatabricksRuntimeAuthClient } from 
 
 const logger = authLogger("databricks");
 
-/** Public credential result with no refresh token. */
-export interface AccessToken {
-  accessToken: string;
-  tokenType: string;
-  expiry?: string;
-  scopes: string[];
-}
+export const AccessTokenSchema = TokenSchema.omit({ refreshToken: true }).describe(
+  "Public credential result with no refresh token.",
+);
+
+export type AccessToken = z.infer<typeof AccessTokenSchema>;
 
 /** Token acquisition controls. */
 export interface TokenOptions {

@@ -12,6 +12,7 @@ date and final status.
 
 ## Active plans
 
+- [Core-first duplication cleanup](2026-11-10-core-dry-audit.md)
 - [Support service-principal MLflow feedback in Databricks Apps](2026-10-08-apps-feedback-service-principal-client.md)
 
 ## Cross-repository suggestions

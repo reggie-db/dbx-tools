@@ -9,14 +9,6 @@ import { parquetReadObjects } from "hyparquet";
 
 import { LM_ARENA_DATASET, LM_ARENA_SPLIT, type LMArenaCatalogData } from "./lm-arena-contract.ts";
 
-export {
-  LM_ARENA_DATASET,
-  LM_ARENA_DATASET_URL,
-  LM_ARENA_SPLIT,
-  type LMArenaCatalogData,
-  type LMArenaConfigurationData,
-} from "./lm-arena-contract.ts";
-
 const LM_ARENA_REPO = { type: "dataset", name: LM_ARENA_DATASET } as const;
 
 /** Load every latest LMArena configuration directly from Hugging Face parquet files. */

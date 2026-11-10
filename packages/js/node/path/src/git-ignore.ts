@@ -10,8 +10,9 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { relativePathWithin } from "@dbx-tools/core";
 import { glob, globSync, type IgnoreLike } from "glob";
 import ignore from "ignore";
 import type { IgnorePatternOptions } from "./ignore.ts";
@@ -160,13 +161,8 @@ export class GitIgnore {
   }
 
   private relativePath(path: string): string | undefined {
-    const absolute = isAbsolute(path) ? resolve(path) : resolve(this.root, path);
-    const relativePath = relative(this.root, absolute);
-    if (relativePath === "" || relativePath === ".") return ".";
-    if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
-      return undefined;
-    }
-    return toPosix(relativePath);
+    const relativePath = relativePathWithin(this.root, resolve(this.root, path));
+    return relativePath === undefined ? undefined : toPosix(relativePath) || ".";
   }
 
   private refreshRules(): void {

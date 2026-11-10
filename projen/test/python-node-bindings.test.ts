@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -7,6 +7,7 @@ import {
   affectedPythonNodeBindingProjects,
   generatePythonNodeBindings,
   type ResolvedPythonNodeBindings,
+  resolvePythonNodeBindingModule,
 } from "../src/python-node-bindings.ts";
 
 const ROOT = join(tmpdir(), "python-node-binding-watch");
@@ -111,5 +112,35 @@ describe("generatePythonNodeBindings", () => {
     );
     generatePythonNodeBindings(root);
     assert.throws(() => writeFileSync(join(stale, "still-present"), ""), /ENOENT/);
+  });
+});
+
+describe("resolvePythonNodeBindingModule", () => {
+  it("resolves the namespace source relative to the package entrypoint", () => {
+    const root = mkdtempSync(join(tmpdir(), "python-node-binding-module-"));
+    temporaryDirectories.push(root);
+    const nested = join(root, "src", "nested");
+    mkdirSync(nested, { recursive: true });
+    const entrypoint = join(root, "src", "index.ts");
+    const module = join(nested, "functions.ts");
+    writeFileSync(module, "export function run() {}\n");
+    writeFileSync(
+      entrypoint,
+      "export /* comment */ * as functions\n  from './nested/functions.ts';\n",
+    );
+
+    assert.equal(resolvePythonNodeBindingModule(entrypoint, "functions"), realpathSync(module));
+  });
+
+  it("rejects missing namespace exports", () => {
+    const root = mkdtempSync(join(tmpdir(), "python-node-binding-module-"));
+    temporaryDirectories.push(root);
+    const entrypoint = join(root, "index.ts");
+    writeFileSync(entrypoint, "export const value = 1;\n");
+
+    assert.throws(
+      () => resolvePythonNodeBindingModule(entrypoint, "missing"),
+      /does not export namespace missing/,
+    );
   });
 });

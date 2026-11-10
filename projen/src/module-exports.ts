@@ -22,7 +22,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, extname, resolve } from "node:path";
-import type { parseSync as OxcParseSync } from "oxc-parser";
+import type { ExportAllDeclaration, parseSync as OxcParseSync } from "oxc-parser";
 
 const require = createRequire(import.meta.url);
 
@@ -70,6 +70,12 @@ export interface PublicFunctionExport {
   readonly sourceFile: string;
   readonly sourceName: string;
   readonly async: boolean;
+}
+
+/** Namespace export name and its source module specifier. */
+export interface PublicNamespaceExport {
+  readonly name: string;
+  readonly source: string;
 }
 
 /** Declaration node types that are inherently type-only. */
@@ -158,20 +164,18 @@ export function publicFunctionExports(file: string): PublicFunctionExport[] {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-/** Names of namespace exports declared as `export * as name from "..."`. */
-export function publicNamespaceExports(file: string): string[] {
+/** Namespace exports declared as `export * as name from "..."`. */
+export function publicNamespaceExports(file: string): PublicNamespaceExport[] {
   return moduleStatements(file)
     .flatMap((statement) => {
       if (statement.type !== "ExportAllDeclaration") return [];
-      const exported = (
-        statement as {
-          exported?: { name?: string; value?: string } | null;
-        }
-      ).exported;
+      const node = statement as ExportAllDeclaration;
+      const exported = node.exported as { name?: string; value?: string } | null;
       const name = exported?.name ?? exported?.value;
-      return name ? [name] : [];
+      const source = node.source.value;
+      return name && source ? [{ name, source }] : [];
     })
-    .sort((left, right) => left.localeCompare(right));
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 interface ResolvedFunctionExport extends PublicFunctionExport {

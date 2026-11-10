@@ -245,7 +245,7 @@ export function parseOpts<T extends z.ZodRawShape>(
 }
 
 /** Supported listener transport schemes. */
-export type ListenScheme = "tcp" | "unix";
+export type ListenScheme = ListenAddress["scheme"];
 
 export const TcpListenAddressSchema = z
   .object({

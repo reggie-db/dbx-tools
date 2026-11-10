@@ -78,6 +78,22 @@ function fixture(): {
   return { root, rootManifest, childManifest };
 }
 
+it("accepts contained directory names beginning with two dots", async () => {
+  const { root } = fixture();
+  await assert.rejects(
+    deployApp(["--directory", "..application", "--profile", "TEST"], { root }),
+    /Built client is missing/,
+  );
+});
+
+it("rejects application directories outside the workspace", async () => {
+  const { root } = fixture();
+  await assert.rejects(
+    deployApp(["--directory", "../outside", "--profile", "TEST"], { root }),
+    /Application directory must be inside the workspace root/,
+  );
+});
+
 it("materializes manifests only while Databricks deploy runs", async () => {
   const { root, rootManifest, childManifest } = fixture();
   const args = ["--target", "dev", "--profile", "TEST"];

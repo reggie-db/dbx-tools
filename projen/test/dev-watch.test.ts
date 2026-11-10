@@ -113,6 +113,8 @@ describe("development command watcher", () => {
       );
       writeFileSync(join(root, "packages/lib/package.json"), '{"name":"@fixture/lib"}\n');
       writeFileSync(join(root, "packages/other/package.json"), '{"name":"@fixture/other"}\n');
+      mkdirSync(join(root, "packages/app/..cache"), { recursive: true });
+      writeFileSync(join(root, "packages/app/..cache/server.ts"), "export {};\n");
 
       const expected = [resolve(root, "packages/app"), resolve(root, "packages/lib")].sort();
       assert.deepEqual(devWatchDirectories(["bun", "packages/app/src/index.ts"], root), expected);
@@ -122,6 +124,10 @@ describe("development command watcher", () => {
       );
       assert.deepEqual(
         devWatchDirectories(["bun", "--cwd", "packages/app", "src/index.ts"], root),
+        expected,
+      );
+      assert.deepEqual(
+        devWatchDirectories(["bun", "packages/app/..cache/server.ts"], root),
         expected,
       );
       assert.deepEqual(

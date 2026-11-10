@@ -62,6 +62,23 @@ describe("GitIgnore", () => {
     assert.equal(matcher.ignores("src/example/keep.ts"), true);
   });
 
+  it("accepts two-dot names but rejects parent and sibling paths", async () => {
+    const root = await fixture();
+    const matcher = new GitIgnore(root);
+    matcher.set("..name/.gitignore", "*.tmp\n");
+
+    assert.equal(matcher.get(join(root, "..name/.gitignore")), "*.tmp\n");
+    assert.equal(matcher.ignores("..name/drop.tmp"), true);
+    assert.equal(matcher.ignores(join(root, "..name/drop.tmp")), true);
+    assert.equal(matcher.ignores("..name/keep.ts"), false);
+    assert.equal(matcher.ignores(root), false);
+    assert.equal(matcher.ignores("../drop.tmp"), false);
+    assert.equal(matcher.ignores(`${root}-sibling/drop.tmp`), false);
+    assert.throws(() => matcher.set("../.gitignore", "*.tmp"), TypeError);
+    assert.throws(() => matcher.set(`${root}-sibling/.gitignore`, "*.tmp"), TypeError);
+    assert.equal(matcher.delete("..name/.gitignore"), true);
+  });
+
   it("lists only positive patterns from retained rules", async () => {
     const root = await fixture();
     const matcher = new GitIgnore(root);

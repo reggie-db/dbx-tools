@@ -1,8 +1,8 @@
 import {
   ModelLatencyScoreSchema,
   ModelRatingSchema,
-  type ModelRateLimits,
-  type ModelTokenPrice,
+  ModelRateLimitsSchema,
+  ModelTokenPriceSchema,
 } from "@dbx-tools/shared-model";
 import { z } from "zod";
 
@@ -51,85 +51,167 @@ export const MODELPARAMS_DEV_MODELS_URL = "https://modelparams.dev/api/v1/models
 export const MODEL_LATENCY_BENCHMARK_URL =
   "https://raw.githubusercontent.com/vicaroai/tokens-per-second/main/benchmarks/results/latest.json";
 
-/** Build-generated retired-model snapshot. */
-export interface RetiredModelsSnapshot {
-  readonly generatedAt: number;
-  readonly models: readonly string[];
-}
+const generatedAtSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .describe("Unix timestamp when dbx-tools generated this snapshot.");
 
-/** Normalized model identities grouped by documented capability. */
-export interface ModelCapabilityCatalogue {
-  readonly responses: readonly string[];
-  readonly imageInput: readonly string[];
-  readonly applyPatch: readonly string[];
-  readonly webSearch: readonly string[];
-}
+export const RetiredModelsSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    models: z.array(z.string()).readonly().describe("Retired foundation-model names."),
+  })
+  .readonly()
+  .describe("Build-generated retired-model snapshot.");
 
-/** Build-generated model-capability snapshot. */
-export interface ModelCapabilitiesSnapshot {
-  readonly generatedAt: number;
-  readonly capabilities: ModelCapabilityCatalogue;
-}
+export type RetiredModelsSnapshot = z.infer<typeof RetiredModelsSnapshotSchema>;
 
-/** Model limits keyed by normalized Databricks model identity. */
-export interface ModelRateLimitCatalogue {
-  readonly models: Readonly<Record<string, ModelRateLimits>>;
-}
+export const ModelCapabilityCatalogueSchema = z
+  .object({
+    responses: z.array(z.string()).readonly().describe("Models supporting OpenAI Responses."),
+    imageInput: z.array(z.string()).readonly().describe("Models accepting image input."),
+    applyPatch: z.array(z.string()).readonly().describe("Models supporting apply_patch."),
+    webSearch: z.array(z.string()).readonly().describe("Models supporting native web search."),
+  })
+  .readonly()
+  .describe("Normalized model identities grouped by documented capability.");
 
-/** Build-generated model-rate-limit snapshot. */
-export interface ModelRateLimitsSnapshot {
-  readonly generatedAt: number;
-  readonly catalogue: ModelRateLimitCatalogue;
-}
+export type ModelCapabilityCatalogue = z.infer<typeof ModelCapabilityCatalogueSchema>;
 
-/** Databricks token prices keyed by normalized model identity. */
-export interface ModelTokenPriceCatalogue {
-  readonly models: Readonly<Record<string, readonly ModelTokenPrice[]>>;
-}
+export const ModelCapabilitiesSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    capabilities: ModelCapabilityCatalogueSchema.describe("Documented model capabilities."),
+  })
+  .readonly()
+  .describe("Build-generated model-capability snapshot.");
 
-/** Build-generated Databricks token-price snapshot. */
-export interface ModelTokenPricesSnapshot {
-  readonly generatedAt: number;
-  readonly catalogue: ModelTokenPriceCatalogue;
-}
+export type ModelCapabilitiesSnapshot = z.infer<typeof ModelCapabilitiesSnapshotSchema>;
 
-/** Documented generic reasoning levels keyed by normalized model identity. */
-export interface ReasoningModelCatalogue {
-  readonly models: Readonly<Record<string, readonly string[]>>;
-}
+export const ModelRateLimitCatalogueSchema = z
+  .object({
+    models: z
+      .record(z.string(), ModelRateLimitsSchema)
+      .readonly()
+      .describe("Published rate limits keyed by normalized Databricks model identity."),
+  })
+  .readonly()
+  .describe("Model limits keyed by normalized Databricks model identity.");
 
-/** Build-generated reasoning-effort documentation snapshot. */
-export interface ReasoningModelsSnapshot {
-  readonly generatedAt: number;
-  readonly catalogue: ReasoningModelCatalogue;
-}
+export type ModelRateLimitCatalogue = z.infer<typeof ModelRateLimitCatalogueSchema>;
 
-/** Portable capability sets normalized from models.dev. */
-export interface ModelsDevCapabilityCatalogue {
-  readonly imageInput: readonly string[];
-  readonly reasoning: readonly string[];
-  readonly tools: readonly string[];
-  readonly structuredOutput: readonly string[];
-  readonly temperatureSupported: readonly string[];
-  readonly temperatureUnsupported: readonly string[];
-}
+export const ModelRateLimitsSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    catalogue: ModelRateLimitCatalogueSchema.describe("Documented model rate limits."),
+  })
+  .readonly()
+  .describe("Build-generated model-rate-limit snapshot.");
 
-/** Build-generated models.dev capability and reasoning snapshot. */
-export interface ModelsDevSnapshot {
-  readonly generatedAt: number;
-  readonly capabilities: ModelsDevCapabilityCatalogue;
-}
+export type ModelRateLimitsSnapshot = z.infer<typeof ModelRateLimitsSnapshotSchema>;
 
-/** Reasoning support and discrete effort levels normalized from modelparams.dev. */
-export interface ModelParamsCatalogue extends ReasoningModelCatalogue {
-  readonly reasoning: readonly string[];
-}
+export const ModelTokenPriceCatalogueSchema = z
+  .object({
+    models: z
+      .record(z.string(), z.array(ModelTokenPriceSchema).readonly())
+      .readonly()
+      .describe("Databricks token-price rows keyed by normalized model identity."),
+  })
+  .readonly()
+  .describe("Databricks token prices keyed by normalized model identity.");
 
-/** Build-generated modelparams.dev reasoning snapshot. */
-export interface ModelParamsSnapshot {
-  readonly generatedAt: number;
-  readonly catalogue: ModelParamsCatalogue;
-}
+export type ModelTokenPriceCatalogue = z.infer<typeof ModelTokenPriceCatalogueSchema>;
+
+export const ModelTokenPricesSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    catalogue: ModelTokenPriceCatalogueSchema.describe("Documented Databricks token prices."),
+  })
+  .readonly()
+  .describe("Build-generated Databricks token-price snapshot.");
+
+export type ModelTokenPricesSnapshot = z.infer<typeof ModelTokenPricesSnapshotSchema>;
+
+export const DocumentedReasoningCatalogueSchema = z
+  .object({
+    models: z
+      .record(z.string(), z.array(z.string()).readonly())
+      .readonly()
+      .describe("Documented effort labels keyed by normalized model identity."),
+  })
+  .readonly()
+  .describe("Reasoning effort labels collected from model documentation.");
+
+export type DocumentedReasoningCatalogue = z.infer<typeof DocumentedReasoningCatalogueSchema>;
+
+export const ReasoningModelsSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    catalogue: DocumentedReasoningCatalogueSchema.describe(
+      "Documented reasoning-effort catalogue.",
+    ),
+  })
+  .readonly()
+  .describe("Build-generated reasoning-effort documentation snapshot.");
+
+export type ReasoningModelsSnapshot = z.infer<typeof ReasoningModelsSnapshotSchema>;
+
+export const ModelsDevCapabilityCatalogueSchema = z
+  .object({
+    imageInput: z.array(z.string()).readonly().describe("Models accepting image input."),
+    reasoning: z.array(z.string()).readonly().describe("Models supporting reasoning."),
+    tools: z.array(z.string()).readonly().describe("Models supporting tool calls."),
+    structuredOutput: z
+      .array(z.string())
+      .readonly()
+      .describe("Models supporting structured output."),
+    temperatureSupported: z
+      .array(z.string())
+      .readonly()
+      .describe("Models accepting temperature configuration."),
+    temperatureUnsupported: z
+      .array(z.string())
+      .readonly()
+      .describe("Models rejecting temperature configuration."),
+  })
+  .readonly()
+  .describe("Portable capability sets normalized from models.dev.");
+
+export type ModelsDevCapabilityCatalogue = z.infer<typeof ModelsDevCapabilityCatalogueSchema>;
+
+export const ModelsDevSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    capabilities: ModelsDevCapabilityCatalogueSchema.describe(
+      "Normalized models.dev capabilities.",
+    ),
+  })
+  .readonly()
+  .describe("Build-generated models.dev capability and reasoning snapshot.");
+
+export type ModelsDevSnapshot = z.infer<typeof ModelsDevSnapshotSchema>;
+
+export const ModelParamsCatalogueSchema = DocumentedReasoningCatalogueSchema.unwrap()
+  .extend({
+    reasoning: z.array(z.string()).readonly().describe("Model identities supporting reasoning."),
+  })
+  .readonly()
+  .describe("Reasoning support and discrete effort levels normalized from modelparams.dev.");
+
+export type ModelParamsCatalogue = z.infer<typeof ModelParamsCatalogueSchema>;
+
+export const ModelParamsSnapshotSchema = z
+  .object({
+    generatedAt: generatedAtSchema,
+    catalogue: ModelParamsCatalogueSchema.describe(
+      "Normalized modelparams.dev reasoning catalogue.",
+    ),
+  })
+  .readonly()
+  .describe("Build-generated modelparams.dev reasoning snapshot.");
+
+export type ModelParamsSnapshot = z.infer<typeof ModelParamsSnapshotSchema>;
 
 export const ModelLatencyScoreCatalogueSchema = z
   .object({
@@ -143,11 +225,7 @@ export type ModelLatencyScoreCatalogue = z.infer<typeof ModelLatencyScoreCatalog
 
 export const ModelLatencyScoreSnapshotSchema = z
   .object({
-    generatedAt: z
-      .number()
-      .int()
-      .nonnegative()
-      .describe("Unix timestamp when dbx-tools generated this snapshot."),
+    generatedAt: generatedAtSchema,
     source: z
       .object({
         name: z.string().describe("Benchmark dataset name."),
@@ -179,11 +257,7 @@ export type ModelRatingCatalogue = z.infer<typeof ModelRatingCatalogueSchema>;
 
 export const ModelRatingsSnapshotSchema = z
   .object({
-    generatedAt: z
-      .number()
-      .int()
-      .nonnegative()
-      .describe("Unix timestamp when dbx-tools generated this snapshot."),
+    generatedAt: generatedAtSchema,
     source: z
       .object({
         name: z.string().describe("Benchmark dataset name."),

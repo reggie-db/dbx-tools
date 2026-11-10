@@ -31,20 +31,6 @@ export interface FrpInstallOptions {
   homeDir?: string;
 }
 
-/** Resolved frpc wiring, or `undefined` when no FRP tunnel is configured. */
-export interface FrpConfig {
-  publicDomain: string;
-  server: string;
-  serverPort: number;
-  protocol: string;
-  token?: string;
-  proxyName: string;
-  path: string;
-  stripPrefix: boolean;
-  port: number;
-  targetPort: number;
-}
-
 export const FrpOptionsSchema = z
   .object({
     publicDomain: z.string().trim().min(1).optional().describe("FRP public HTTP host."),
@@ -62,6 +48,14 @@ export const FrpOptionsSchema = z
   .describe("FRP tunnel resolution options.");
 
 export type FrpOptions = z.input<typeof FrpOptionsSchema>;
+
+/** Resolved frpc wiring with every routing field populated; authentication remains optional. */
+export const FrpConfigSchema = FrpOptionsSchema.required()
+  .extend({ token: FrpOptionsSchema.shape.token })
+  .describe("Resolved FRP tunnel configuration.");
+
+/** Resolved frpc wiring, or `undefined` when no FRP tunnel is configured. */
+export type FrpConfig = z.output<typeof FrpConfigSchema>;
 
 function bareHost(value: string | undefined): string | undefined {
   if (!value) return undefined;

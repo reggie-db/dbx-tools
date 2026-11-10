@@ -696,10 +696,16 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     if (!(type.flags & ts.TypeFlags.Object) && !type.isIntersection()) return undefined;
     if (checker.isArrayType(type) || type.getCallSignatures().length > 0) return undefined;
     if (checker.getIndexTypeOfType(type, ts.IndexKind.String)) return undefined;
-    const symbolName = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
-    const name = symbolName && symbolName !== "__type" ? symbolName : preferredName;
-    if (!name || name === "__type") return undefined;
-    return pythonRecord(checker, type, records, path, preferredName);
+    // Zod inference preserves the structure of nested objects, not necessarily
+    // the alias of their input schema. Name those records from the binding path,
+    // using the same naming owner as anonymous response records.
+    return pythonRecord(
+      checker,
+      type,
+      records,
+      path,
+      preferredName ?? pythonObjectName(type, path, "Options"),
+    );
   }
 
   function declaredTypeName(node: ts.TypeNode | undefined): string | undefined {

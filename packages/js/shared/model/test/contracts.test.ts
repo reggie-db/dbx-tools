@@ -5,6 +5,7 @@ import {
   EndpointCapabilitiesSchema,
   ModelLatencyScoreSchema,
   ModelMetadataSchema,
+  ModelQuerySchema,
   ModelRatingSchema,
   ModelRateLimitsSchema,
   ModelTokenPriceSchema,
@@ -174,6 +175,35 @@ describe("browser-safe model schemas", () => {
       ResolvedModelSchema.parse({ modelId: "model", matched: true, score: 0 }),
     );
     assert.throws(() => ResolvedModelSchema.parse({ modelId: "model", matched: true, score: 2 }));
+  });
+
+  it("reuses catalogue filters for model resolution without accepting query-only fields", () => {
+    for (const field of ["threshold", "requiresTools", "modelSource"] as const) {
+      assert.equal(ResolveModelOptionsSchema.shape[field], ModelQuerySchema.shape[field]);
+      assert.equal(ResolveModelInputSchema.shape[field], ModelQuerySchema.shape[field]);
+    }
+    for (const field of ["requiresStructuredOutput", "optimizeFor", "modelClass"] as const) {
+      assert.equal(ResolveModelInputSchema.shape[field], ModelQuerySchema.shape[field]);
+    }
+    assert.deepEqual(ResolveModelOptionsSchema.parse({ search: "chat", limit: 5 }), {});
+    assert.deepEqual(ResolveModelInputSchema.parse({ search: "chat", limit: 5 }), {});
+    assert.deepEqual(ResolveModelInputSchema.parse({}), {});
+    for (const input of [
+      { threshold: -0.1 },
+      { threshold: 1.1 },
+      { requiresTools: "true" },
+      { modelSource: "unknown" },
+    ]) {
+      assert.throws(() => ResolveModelOptionsSchema.parse(input));
+      assert.throws(() => ResolveModelInputSchema.parse(input));
+    }
+    for (const input of [
+      { requiresStructuredOutput: "true" },
+      { optimizeFor: "unknown" },
+      { modelClass: "unknown" },
+    ]) {
+      assert.throws(() => ResolveModelInputSchema.parse(input));
+    }
   });
 
   it("enforces nonnegative integer rate limits", () => {

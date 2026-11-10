@@ -2,9 +2,9 @@
 import type { ModelStatus, ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import retiredModelsSnapshotJson from "./generated/retired-models.json" with { type: "json" };
-import type { RetiredModelsSnapshot } from "./metadata-contract.ts";
+import { RetiredModelsSnapshotSchema } from "./metadata-contract.ts";
 
-const snapshot = retiredModelsSnapshotJson as RetiredModelsSnapshot;
+const snapshot = RetiredModelsSnapshotSchema.parse(retiredModelsSnapshotJson);
 const RETIRED_MODEL_PREFIXES = new Set([
   "ai",
   "anthropic",

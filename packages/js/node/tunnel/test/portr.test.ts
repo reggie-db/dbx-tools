@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
+  PortrConfigSchema,
+  PortrOptionsSchema,
   normalizePortrOutput,
   portrAssetName,
   probePortrPublicUrl,
@@ -13,6 +15,22 @@ import {
 } from "../src/portr.ts";
 
 describe("resolvePortrConfig", () => {
+  it("derives resolved endpoint fields without retaining the input-only domain", () => {
+    assert.equal(PortrOptionsSchema.safeParse({ port: 8000 }).success, true);
+    assert.equal(PortrConfigSchema.safeParse({ port: 8000 }).success, false);
+    const resolved = resolvePortrConfig({
+      publicDomain: "demo.example.com",
+      token: "secret",
+      port: 8000,
+    });
+    assert.deepEqual(PortrConfigSchema.parse(resolved), resolved);
+    assert.equal(PortrConfigSchema.safeParse({ ...resolved, token: undefined }).success, false);
+    assert.equal(
+      PortrConfigSchema.safeParse({ ...resolved, publicDomain: "demo.example.com" }).success,
+      false,
+    );
+  });
+
   it("uses port 4444 by default and accepts a port 443 SSH endpoint", () => {
     assert.deepEqual(
       resolvePortrConfig({

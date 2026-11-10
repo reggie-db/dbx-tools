@@ -14,13 +14,7 @@ import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_MODEL_ROUTE_KEY, type MastraModelRoute } from "./serving.ts";
 
 /** Minimal Mastra usage shape required to publish one cumulative snapshot. */
-export interface MastraTurnUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  reasoningTokens?: number;
-  cachedInputTokens?: number;
-}
+export type MastraTurnUsage = Partial<ModelUsagePartData["usage"]>;
 
 /** Minimal custom writer supplied to Mastra's native `onFinish` callback. */
 export interface MastraFinishWriter {

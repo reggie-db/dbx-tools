@@ -17,6 +17,7 @@ import { RELEASE_INSTALL_ENV, RELEASE_WORKFLOW_FILE } from "../src/release-conte
 import {
   RELEASE_INSTALL_MODES,
   RELEASE_PUBLISH_TARGETS,
+  ReleaseStepSelectionSchema,
   releasePublishesLocally,
   releaseStepSelection,
   releaseTagAnnotation,
@@ -728,6 +729,8 @@ export async function runRelease(
   return tag;
 }
 
+const releaseStepFields = ReleaseStepSelectionSchema.unwrap().shape;
+
 export const ReleaseOptionsSchema = z.object({
   root: TaskRootOptionSchema,
   branch: z.string().trim().min(1).default("main").describe("Release branch"),
@@ -749,11 +752,10 @@ export const ReleaseOptionsSchema = z.object({
     .enum(RELEASE_INSTALL_MODES)
     .default("auto")
     .describe("Dependency install mode: auto follows manifests, always installs, never reuses"),
-  npm: z.boolean().default(true).describe("Build and publish npm packages"),
-  pypi: z.boolean().default(true).describe("Build and publish Python packages"),
-  docs: z.boolean().optional().describe("Build and deploy documentation"),
-  validation: z
-    .boolean()
+  npm: releaseStepFields.npm.default(true).describe("Build and publish npm packages"),
+  pypi: releaseStepFields.pypi.default(true).describe("Build and publish Python packages"),
+  docs: releaseStepFields.docs.optional().describe("Build and deploy documentation"),
+  validation: releaseStepFields.validation
     .default(true)
     .describe("Run optional release validation tasks before publishing"),
   watchGithubActions: z

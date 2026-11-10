@@ -11,8 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import { basename, dirname, join, resolve } from "node:path";
+import { projectUtils, relativePathWithin } from "@dbx-tools/core";
 import { parse, stringify } from "smol-toml";
 import { runTaskCommand } from "./_task-command.ts";
 import { preparePythonProjectForPublication, pythonProjectInfo } from "./python-release.ts";
@@ -119,11 +119,7 @@ function buildPythonProjectsInternal(
   const root = resolve(options.root);
   const output = resolve(options.output);
   const workspace = projectUtils.root(root) ?? dirname(root);
-  const outputPath = relative(workspace, output);
-  if (
-    !allowOutputOutsideWorkspace &&
-    (!outputPath || outputPath.startsWith("..") || isAbsolute(outputPath))
-  ) {
+  if (!allowOutputOutsideWorkspace && !relativePathWithin(workspace, output)) {
     throw new Error("Python release output must be a non-root directory inside the workspace");
   }
   rmSync(output, { recursive: true, force: true });

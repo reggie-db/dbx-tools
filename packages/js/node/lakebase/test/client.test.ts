@@ -4,6 +4,7 @@ import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
 import { parseAddress } from "../src/address.ts";
 import {
   LakebaseClient,
+  ResolvedLakebaseSchema,
   type LakebaseApiClient,
   type LakebaseClientDependencies,
 } from "../src/client.ts";
@@ -12,6 +13,7 @@ describe("Lakebase discovery", () => {
   test("follows pagination and selects usable defaults", async () => {
     const { calls, client } = discoveryClient();
     const resolved = await client.resolve(parseAddress("project"), "PROFILE");
+    expect(ResolvedLakebaseSchema.parse(resolved)).toEqual(resolved);
     expect(resolved).toEqual({
       project: "project",
       branch: "production",
@@ -28,6 +30,22 @@ describe("Lakebase discovery", () => {
       path: "/api/2.0/postgres/credentials",
       body: { endpoint: resolved.endpoint },
     });
+  });
+
+  test("validates resolved connection ports with the shared TCP contract", () => {
+    const connection = {
+      host: "primary.example",
+      port: 5433,
+      database: "databricks_postgres",
+      user: "user@example.com",
+      endpoint: "projects/project/branches/production/endpoints/primary",
+      project: "project",
+      branch: "production",
+    };
+    for (const port of [0, -1, 65_536, 1.5]) {
+      expect(ResolvedLakebaseSchema.safeParse({ ...connection, port }).success).toBe(false);
+    }
+    expect(ResolvedLakebaseSchema.parse(connection)).toEqual(connection);
   });
 
   test("caches credentials until the API expiry buffer and coalesces refreshes", async () => {

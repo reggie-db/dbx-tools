@@ -15,6 +15,8 @@ import {
 } from "../src/models.ts";
 import {
   SmartRouterObservationSchema,
+  SmartRouterRouteOptionSchema,
+  SmartRouterRouteSelectionSchema,
   SmartRouterRequestSchema,
   SmartRouterResponseSchema,
 } from "../src/smart-router.ts";
@@ -38,6 +40,29 @@ const CAPABILITIES = {
 };
 
 describe("shared model-gateway schemas", () => {
+  it("reuses route-option validation while preserving additive selection fields", () => {
+    const routeOption = SmartRouterRouteSelectionSchema.shape.route_option;
+    assert.equal(routeOption.shape.model, SmartRouterRouteOptionSchema.shape.model);
+    assert.deepEqual(
+      SmartRouterRouteSelectionSchema.parse({
+        route_option: { model: " system.ai.chat ", provider: "databricks" },
+        extra: true,
+      }),
+      {
+        route_option: { model: "system.ai.chat", provider: "databricks" },
+        extra: true,
+      },
+    );
+    assert.throws(() => SmartRouterRouteOptionSchema.parse({ model: "system.ai.chat" }));
+    for (const route_option of [
+      {},
+      { model: " " },
+      { model: "system.ai.chat", harness: "unknown" },
+    ]) {
+      assert.throws(() => SmartRouterRouteSelectionSchema.parse({ route_option }));
+    }
+  });
+
   it("validates every protocol literal", () => {
     for (const protocol of [
       "openai-responses",

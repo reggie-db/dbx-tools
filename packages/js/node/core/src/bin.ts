@@ -18,7 +18,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -28,6 +28,7 @@ import { coerce, gte, type SemVer } from "semver";
 import { x as extractTar } from "tar";
 
 import { withFileLock } from "./file-lock.ts";
+import { relativePathWithin } from "./file.ts";
 
 const execFileAsync = promisify(execFile);
 const logger = log.logger("core:bin");
@@ -133,7 +134,7 @@ function packagePath(root: string, path: string): string {
   }
   const packageRoot = resolve(root);
   const resolved = resolve(packageRoot, path);
-  if (resolved === packageRoot || !resolved.startsWith(`${packageRoot}${sep}`)) {
+  if (!relativePathWithin(packageRoot, resolved)) {
     throw new TypeError(`binary package path escapes its root: ${path}`);
   }
   return resolved;

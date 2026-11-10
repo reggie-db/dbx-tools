@@ -62,7 +62,7 @@ export { PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE, makeWritable, makeReadon
 export type { HeaderOpts } from "./src/generated.ts";
 export { create } from "./src/mixin.ts";
 export { moduleStatements, moduleExports, publicFunctionExports, publicNamespaceExports } from "./src/module-exports.ts";
-export type { ModuleStatement, ModuleExport, PublicFunctionExport } from "./src/module-exports.ts";
+export type { ModuleStatement, ModuleExport, PublicFunctionExport, PublicNamespaceExport } from "./src/module-exports.ts";
 export { applyPublishConfig, packNpmPackage } from "./src/npm-packaging.ts";
 export type { NpmArchiveManifestTransform } from "./src/npm-packaging.ts";
 export { npmReleaseMatches, publishedNpmRelease, isNpmStagedVersionConflict, waitForMatchingNpmRelease, publishNpmArchive, readNpmArchiveManifest, readNpmArchiveIdentity, npmArchiveContentDigest } from "./src/npm-release.ts";

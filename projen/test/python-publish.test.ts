@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -91,6 +99,26 @@ describe("Python release packaging", () => {
             version: "1.2.3",
           }),
         /inside the workspace/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts output names beginning with two dots while rejecting the workspace itself", () => {
+    const root = mkdtempSync(join(tmpdir(), "python-projects-"));
+    try {
+      writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+      buildPythonProjects({
+        allowEmpty: true,
+        output: join(root, "..artifacts"),
+        root,
+        version: "1.2.3",
+      });
+      assert.equal(existsSync(join(root, "..artifacts")), true);
+      assert.throws(
+        () => buildPythonProjects({ allowEmpty: true, output: root, root, version: "1.2.3" }),
+        /non-root directory inside the workspace/,
       );
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -469,7 +469,7 @@ describe("Python Node task components", () => {
     assert.doesNotMatch(runtime, /clone\(util\.mergeDefs\(/);
   });
 
-  it("keeps nested Zod option aliases on named intersections", () => {
+  it("generates nested Zod-inferred records without mirrored interfaces", () => {
     const directory = temporaryDirectory();
     const entryDirectory = packageDirectory(directory, "fixture-entry");
     symlinkSync(
@@ -482,9 +482,9 @@ describe("Python Node task components", () => {
       [
         'import { z } from "zod";',
         "export const TimingSchema = z.object({ timeoutMs: z.number().int().default(1) }).strict();",
-        "export interface Timing extends z.input<typeof TimingSchema> {}",
+        "export type Timing = z.input<typeof TimingSchema>;",
         "export const LoadOptionsSchema = z.object({ profile: z.string().optional(), timing: TimingSchema.optional() }).strict();",
-        "export interface LoadOptions extends Omit<z.input<typeof LoadOptionsSchema>, 'timing'> { timing?: Timing }",
+        "export type LoadOptions = z.input<typeof LoadOptionsSchema>;",
         "export function load(options: LoadOptions = {}): void { void options; }",
       ].join("\n"),
     );
@@ -497,9 +497,10 @@ describe("Python Node task components", () => {
       join(directory, "python/src/fixture/runtime/_generated/node/fixture_entry/index.py"),
       "utf8",
     );
-    assert.match(bindings, /class Timing:/);
+    assert.match(bindings, /class LoadOptionsTimingOptions:/);
     assert.match(bindings, /class LoadOptions:/);
-    assert.match(bindings, /timing: Timing \| None/);
+    assert.match(bindings, /timing: LoadOptionsTimingOptions \| None/);
+    assert.match(bindings, /timeout_ms: int \| float \| None/);
   });
 
   it("fails when JavaScript exports collide in Python", () => {

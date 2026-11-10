@@ -10,5 +10,5 @@ export * from "./src/bindings.ts";
 export * as client from "./src/client.ts";
 export { SSL_MODES, parseAddress, parseResourcePath, parseSslMode, requireAddress, connectionUrl } from "./src/address.ts";
 export type { SslMode, LakebaseConnectionInputs, ParsedAddress } from "./src/address.ts";
-export { DatabaseCredentialSchema, LakebaseClient, createLakebaseClient } from "./src/client.ts";
+export { DatabaseCredentialSchema, ResolvedLakebaseSchema, LakebaseClient, createLakebaseClient } from "./src/client.ts";
 export type { DatabaseCredential, ResolvedLakebase, LakebaseApiClient, LakebaseRequestOptions, LakebaseClientDependencies } from "./src/client.ts";

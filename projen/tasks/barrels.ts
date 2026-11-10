@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
 /** Generate package barrels once or keep affected barrels current in watch mode. */
-import { sep } from "node:path";
+import { relativePathWithin } from "@dbx-tools/core";
 import { log, type Sequence, sequence, pluralize } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
@@ -16,7 +16,7 @@ function ownerPackageDir(
   abs: string,
   packages: readonly { readonly dir: string }[],
 ): string | undefined {
-  return packages.find(({ dir }) => abs === dir || abs.startsWith(dir + sep))?.dir;
+  return packages.find(({ dir }) => relativePathWithin(dir, abs) !== undefined)?.dir;
 }
 
 function changedBarrelTargets(changed: readonly string[]): Sequence<string> {

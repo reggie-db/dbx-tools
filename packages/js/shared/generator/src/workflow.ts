@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 import { BrandPackageSchema } from "./brand.ts";
-import { KpiResearchResultSchema, ResearchedKpiSchema } from "./kpi.ts";
+import { KpiResearchRequestSchema, KpiResearchResultSchema, ResearchedKpiSchema } from "./kpi.ts";
 
 const nonBlankString = z.string().trim().min(1);
 const identifier = z.string().regex(/^[a-z][a-z0-9_]*$/, "Expected a lowercase SQL identifier.");
@@ -18,31 +18,19 @@ export const PresentationModeSchema = z.enum(["dashboard", "genie"]);
 export type PresentationMode = z.infer<typeof PresentationModeSchema>;
 
 /** Complete input for the governed generator workflow. */
-export const GeneratorRequestSchema = z
-  .object({
-    company: nonBlankString.max(200).describe("Company or brand represented by the demo."),
-    purpose: nonBlankString.max(200).describe("Short purpose used in schema and asset names."),
-    queries: z
-      .array(nonBlankString.max(500))
-      .min(1)
-      .max(10)
-      .describe("Business questions that shape KPI research and generated data."),
-    website: z
-      .string()
-      .url()
-      .optional()
-      .describe("Known company website for brand disambiguation."),
-    presentation: PresentationModeSchema.default("dashboard").describe(
-      "Dashboard with automatic companion Genie, or standalone Genie without a dashboard.",
-    ),
-    rowCount: z
-      .number()
-      .int()
-      .min(1_000)
-      .max(100_000)
-      .default(50_000)
-      .describe("Rows generated in the primary fact table."),
-  })
+export const GeneratorRequestSchema = KpiResearchRequestSchema.extend({
+  website: z.string().url().optional().describe("Known company website for brand disambiguation."),
+  presentation: PresentationModeSchema.default("dashboard").describe(
+    "Dashboard with automatic companion Genie, or standalone Genie without a dashboard.",
+  ),
+  rowCount: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(100_000)
+    .default(50_000)
+    .describe("Rows generated in the primary fact table."),
+})
   .strict()
   .describe("Request for a per-user Databricks demo data environment.");
 

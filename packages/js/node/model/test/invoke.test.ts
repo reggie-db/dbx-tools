@@ -6,12 +6,12 @@ import {
   anthropicMessagesUrl,
   chatCompletionsUrl,
   invocationsUrl,
-  isResponsesOnly,
   openResponsesUrl,
   responsesUpstreamUrl,
   responsesUrl,
   servingEndpointsUrl,
 } from "../src/invoke.ts";
+import { isResponsesOnly } from "../src/policy.ts";
 
 describe("Model Serving invocation URLs", () => {
   it("encodes endpoint ids in the invocations URL", () => {

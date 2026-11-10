@@ -7,13 +7,6 @@
 import { createHash } from "node:crypto";
 
 import {
-  parseAddress as parseLakebaseAddress,
-  parseResourcePath as parseLakebaseResourcePath,
-  parseSslMode as parseLakebaseSslMode,
-  type LakebaseConnectionInputs,
-  type SslMode,
-} from "@dbx-tools/lakebase";
-import {
   fnvHashWithOptions,
   toOneOrMany,
   toStableKey,
@@ -57,19 +50,4 @@ export function channelName(value: unknown): string {
     .replace(/_+$/, "");
   const prefix = /^[A-Za-z_]/.test(body) ? body : `${CHANNEL_FALLBACK}_${body}`;
   return `${prefix}_${suffix}`.replace(/_+/g, "_");
-}
-
-/** Parse a PostgreSQL URL, Lakebase resource path, hostname, or project ID. */
-export function parseAddress(input: string | null | undefined): LakebaseConnectionInputs {
-  return parseLakebaseAddress(input);
-}
-
-/** Parse a canonical Lakebase project, branch, endpoint, or database path. */
-export function parseResourcePath(input: string | null | undefined): LakebaseConnectionInputs {
-  return parseLakebaseResourcePath(input);
-}
-
-/** Parse a supported PostgreSQL SSL mode. */
-export function parseSslMode(input: string | null | undefined): SslMode | undefined {
-  return parseLakebaseSslMode(input);
 }

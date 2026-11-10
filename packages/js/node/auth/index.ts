@@ -10,7 +10,7 @@ export * as client from "./src/client.ts";
 export * as config from "./src/config.ts";
 export * as profile from "./src/profile.ts";
 export * as runtimeAuth from "./src/runtime-auth.ts";
-export { createAuthClient } from "./src/client.ts";
+export { AccessTokenSchema, createAuthClient } from "./src/client.ts";
 export type { AccessToken, TokenOptions, AuthClient, DatabricksAuthDependencies } from "./src/client.ts";
 export { AuthOptionsSchema, DatabricksAuthOptionsSchema, AUTH_DEFAULTS, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE, DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./src/config.ts";
 export type { AuthOptions, DatabricksAuthOptions } from "./src/config.ts";

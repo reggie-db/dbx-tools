@@ -33,8 +33,8 @@
 
 import {
   type GenieChatEvent,
-  type MessageStatus,
   GenieChatEventSchema,
+  MessageStatusSchema,
 } from "@dbx-tools/shared-genie";
 import {
   ModelTokenPriceSchema,
@@ -462,9 +462,9 @@ export const AskGenieDoneEventSchema = z.object({
   statementIds: z
     .array(z.string())
     .describe("Statement ids for non-empty result sets produced by this turn."),
-  status: z
-    .custom<MessageStatus>((value) => typeof value === "string")
-    .describe("Terminal Genie wire status mirrored from the source result event."),
+  status: MessageStatusSchema.describe(
+    "Terminal Genie wire status mirrored from the source result event.",
+  ),
 });
 /** Completion event for one `ask_genie` invocation, including its terminal status. */
 export type AskGenieDoneEvent = z.infer<typeof AskGenieDoneEventSchema>;

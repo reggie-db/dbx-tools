@@ -29,6 +29,8 @@ const CONFIG = {
 
 describe("browser-safe Databricks auth schemas", () => {
   it("validates canonical auth and target values", () => {
+    assert.deepEqual(authTypeSchema.options, Object.values(AuthType));
+    assert.deepEqual(targetKindSchema.options, Object.values(TargetKind));
     assert.equal(authTypeSchema.parse("databricks-cli"), AuthType.DatabricksCli);
     assert.equal(targetKindSchema.parse("workspace"), TargetKind.Workspace);
     assert.throws(() => authTypeSchema.parse("unknown"));
@@ -74,5 +76,32 @@ describe("browser-safe Databricks auth schemas", () => {
     );
     assert.throws(() => authTypeSchema.parse(RUNTIME_AUTH_TYPE));
     assert.equal("accessToken" in databricksAuthClientInfoSchema.parse(CONFIG), false);
+  });
+
+  it("reuses profile metadata while requiring a resolved client host", () => {
+    for (const field of ["accountId", "workspaceId", "target", "principal"] as const) {
+      assert.equal(
+        databricksAuthClientInfoSchema.shape[field],
+        databricksProfileSummarySchema.shape[field],
+      );
+    }
+    assert.doesNotThrow(() =>
+      databricksProfileSummarySchema.parse({ ...PROFILE, host: undefined }),
+    );
+    assert.throws(() => databricksAuthClientInfoSchema.parse({ ...CONFIG, host: undefined }));
+    assert.throws(() => databricksAuthClientInfoSchema.parse({ ...CONFIG, profile: "" }));
+    assert.throws(() => databricksAuthClientInfoSchema.parse({ ...CONFIG, principal: "" }));
+    assert.equal(
+      databricksAuthClientInfoSchema.parse({
+        ...CONFIG,
+        name: PROFILE.name,
+        accessToken: "not-published",
+      }).host,
+      PROFILE.host,
+    );
+    assert.equal(
+      "name" in databricksAuthClientInfoSchema.parse({ ...CONFIG, name: PROFILE.name }),
+      false,
+    );
   });
 });

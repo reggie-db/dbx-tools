@@ -95,6 +95,36 @@ describe("LocalFileSystem", () => {
     );
   });
 
+  it("allows names beginning with two dots, including symlink targets and missing leaves", async () => {
+    const { fs, root } = await tempFs();
+    try {
+      await fs.mkdir("..name");
+      await fs.writeFile("..name/note.txt", "inside");
+      await symlink(path.join(root, "..name"), path.join(root, "link"), "dir");
+      assert.equal(await fs.readFile("link/note.txt", { encoding: "utf8" }), "inside");
+      await fs.writeFile("..name/nested/new.txt", "created");
+      assert.equal(await fs.readFile("..name/nested/new.txt", { encoding: "utf8" }), "created");
+      assert.equal((await fs.stat(".")).type, "directory");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks creation beneath a symlink escape even when the leaf is missing", async () => {
+    const { fs, root } = await tempFs();
+    const outside = await mkdtemp(path.join(tmpdir(), "dbx-local-fs-out-"));
+    try {
+      await symlink(outside, path.join(root, "link"), "dir");
+      await assert.rejects(
+        () => fs.writeFile("link/nested/new.txt", "outside"),
+        (err: unknown) => err instanceof FileSystemError && err.code === "PERMISSION_DENIED",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   it("honors overwrite: false", async () => {
     const { fs } = await tempFs();
     await fs.writeFile("once.txt", "one");

@@ -1,10 +1,10 @@
 #!/usr/bin/env -S bun
 /** Deploy an AppKit workspace through npm-compatible temporary manifests. */
 import { cpSync, existsSync, rmSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { resolveProfile } from "@dbx-tools/auth";
 import { serializeArgs } from "@dbx-tools/cli-args";
-import { spawn, spawnSync } from "@dbx-tools/core";
+import { relativePathWithin, spawn, spawnSync } from "@dbx-tools/core";
 import { log, toError } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
@@ -90,11 +90,9 @@ export async function deployApp(
   const root = dependencies.root ?? process.cwd();
   const options = await resolveDeployOptions(args, dependencies);
   const application = resolve(root, options.directory);
-  const applicationPath = relative(root, application);
-  if (!applicationPath || applicationPath.startsWith("..") || isAbsolute(applicationPath)) {
-    if (options.directory !== ".") {
-      throw new Error("Application directory must be inside the workspace root");
-    }
+  const applicationPath = relativePathWithin(root, application);
+  if (applicationPath === undefined || (applicationPath === "" && options.directory !== ".")) {
+    throw new Error("Application directory must be inside the workspace root");
   }
   const clientDist = join(application, "client", "dist");
   if (!existsSync(clientDist)) {

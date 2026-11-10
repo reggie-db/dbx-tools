@@ -13,7 +13,7 @@ export * as session from "./src/session.ts";
 export * as topicBus from "./src/topic-bus.ts";
 export { withAdvisoryLock, withAdvisoryTransactionLock } from "./src/advisory-lock.ts";
 export type { AdvisoryLockKey, PgPoolLike, PgQueryable } from "./src/advisory-lock.ts";
-export { advisoryLockId, channelName, parseAddress, parseResourcePath, parseSslMode } from "./src/identity.ts";
+export { advisoryLockId, channelName } from "./src/identity.ts";
 export { POINTER_VERSION, resolvePersistenceOptions, provisionMessageBusSchema, messageBusGrantStatements, ttlMilliseconds, cleanupExpired, history, persistedNotify, pointerPayload, decodePointer, readPointer } from "./src/persistence.ts";
 export type { TopicPersistenceScope, DurationInput, TopicBusPersistenceOptions, ResolvedTopicBusPersistenceOptions, StoredTopicMessage, TopicHistoryPage, TopicPointer } from "./src/persistence.ts";
 export { resolvePostgresRole, quotePostgresIdentifier, postgresRoleStatement, postgresServerSettings, postgresConnectionOptions } from "./src/session.ts";

@@ -41,6 +41,7 @@ For UI-only demo iteration, run `bun run demo -- -d` (`--watch-disable`) so AppK
 
 Primary ownership:
 
+- `packages/js/node/core/src/file.ts` owns lexical host-path containment through `relativePathWithin`. Reuse it for host filesystem boundaries; callers still own symlink resolution and whether the boundary itself is allowed. Portable filesystem namespace paths remain owned by `@dbx-tools/shared-fs`.
 - `packages/js/shared/core/src/options.ts` owns common Databricks environment metadata, normalized URL and TCP/listener schemas, and schema-level option parse/serialization. `packages/js/cli/args` (`@dbx-tools/cli-args`) owns Commander argument binding and argv serialization.
 - `packages/js/node/auth` owns Node/Bun Databricks auth option schemas, default environment/config credential resolution, profile selection, credential lifecycle, and token/header production for CLI-backed U2M, PAT, M2M, App SP/OBO, and an inert Python-runtime auth hook. Call `createAuthClient()` without parallel environment parsing when the default auth sources should apply. It does not own workspace HTTP APIs or construct SDK clients; consuming capability packages own their transport, while the Python Node runtime may install the SDK-backed process capability consumed by the hook.
 - `packages/js/shared/auth` owns browser-safe passwordless and Databricks auth values, secret-free profile summaries, profile selections, and auth client field schemas.

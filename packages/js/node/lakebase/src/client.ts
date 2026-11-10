@@ -16,7 +16,7 @@ import {
   listProfiles,
 } from "@dbx-tools/auth";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
-import { log, isRecord, trimToUndefined } from "@dbx-tools/shared-core";
+import { log, isRecord, tcpPortSchema, trimToUndefined } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import type { ParsedAddress } from "./address.ts";
@@ -51,16 +51,19 @@ export const DatabaseCredentialSchema = z
 /** Lakebase OAuth credential returned by the Databricks Postgres API. */
 export type DatabaseCredential = z.infer<typeof DatabaseCredentialSchema>;
 
-/** Resolved Lakebase endpoint and database connection identity. */
-export interface ResolvedLakebase {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  endpoint: string;
-  project: string;
-  branch: string;
-}
+export const ResolvedLakebaseSchema = z
+  .object({
+    host: z.string().describe("PostgreSQL endpoint hostname."),
+    port: tcpPortSchema.describe("PostgreSQL endpoint TCP port."),
+    database: z.string().describe("PostgreSQL database name."),
+    user: z.string().describe("PostgreSQL user identity."),
+    endpoint: z.string().describe("Canonical Lakebase endpoint resource path."),
+    project: z.string().describe("Lakebase project identifier."),
+    branch: z.string().describe("Lakebase branch identifier."),
+  })
+  .describe("Resolved Lakebase endpoint and database connection identity.");
+
+export type ResolvedLakebase = z.infer<typeof ResolvedLakebaseSchema>;
 
 interface Timed<T> {
   value: T;
@@ -113,7 +116,9 @@ export class LakebaseClient {
     const key = `${profile ?? "<default>"}:${JSON.stringify(target)}`;
     const cached = current(this.resolved.get(key));
     if (cached) return cached;
-    const value = await this.discover(await this.session(profile), target);
+    const value = ResolvedLakebaseSchema.parse(
+      await this.discover(await this.session(profile), target),
+    );
     this.resolved.set(key, timed(value, DISCOVERY_TTL_MS));
     return value;
   }

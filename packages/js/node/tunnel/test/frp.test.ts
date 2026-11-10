@@ -4,9 +4,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { frpAssetName, resolveFrpConfig, writeFrpConfig } from "../src/frp.ts";
+import {
+  FrpConfigSchema,
+  FrpOptionsSchema,
+  frpAssetName,
+  resolveFrpConfig,
+  writeFrpConfig,
+} from "../src/frp.ts";
 
 describe("frp", () => {
+  it("derives resolved fields from the options while keeping authentication optional", () => {
+    assert.equal(FrpOptionsSchema.safeParse({ port: 8000 }).success, true);
+    assert.equal(FrpConfigSchema.safeParse({ port: 8000 }).success, false);
+    const resolved = resolveFrpConfig({ publicDomain: "demo.example.com", port: 8000 });
+    assert.deepEqual(FrpConfigSchema.parse(resolved), resolved);
+    assert.equal(FrpConfigSchema.shape.token.isOptional(), true);
+    assert.equal(FrpConfigSchema.safeParse({ ...resolved, targetPort: 65536 }).success, false);
+  });
+
   it("selects published Darwin and Linux assets", () => {
     assert.equal(frpAssetName("0.68.1", "darwin", "arm64"), "frp_0.68.1_darwin_arm64.tar.gz");
     assert.equal(frpAssetName("0.68.1", "darwin", "x64"), "frp_0.68.1_darwin_amd64.tar.gz");

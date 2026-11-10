@@ -1,13 +1,17 @@
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
+import { z } from "zod";
 
-/** Stored OAuth credential with renewal metadata. */
-export interface Token {
-  accessToken: string;
-  tokenType: string;
-  refreshToken?: string;
-  expiry?: string;
-  scopes: string[];
-}
+export const TokenSchema = z
+  .object({
+    accessToken: z.string().describe("Access token used to authenticate requests."),
+    tokenType: z.string().describe("Authorization scheme for the access token."),
+    refreshToken: z.string().optional().describe("Private credential used to renew the token."),
+    expiry: z.string().optional().describe("Expiration time reported by the token provider."),
+    scopes: z.array(z.string()).describe("OAuth scopes granted to the token."),
+  })
+  .describe("Stored OAuth credential with renewal metadata.");
+
+export type Token = z.infer<typeof TokenSchema>;
 
 /** Resolved profile with secrets retained for provider construction. */
 export interface DatabricksProfile extends DatabricksProfileSummary {

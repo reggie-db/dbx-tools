@@ -18,8 +18,6 @@
  * @module
  */
 
-import { isResponsesOnly as isResponsesOnlyByPolicy } from "./policy.ts";
-
 /**
  * Path segment appended to a serving endpoint for OpenAI-compatible chat
  * requests. Databricks routes `/serving-endpoints/<name>/invocations` to the
@@ -107,15 +105,6 @@ export function anthropicMessagesUrl(host: string): string {
 /** Workspace Anthropic provider base URL used by AI SDK providers. */
 export function anthropicBaseUrl(host: string): string {
   return new URL(ANTHROPIC_BASE_PATH, host).toString().replace(/\/$/, "");
-}
-
-/**
- * True when the endpoint is known to reject Chat Completions `/invocations`
- * and require the Responses API (Codex models today). Callers should route
- * those to {@link responsesUrl} instead of {@link invocationsUrl}.
- */
-export function isResponsesOnly(endpoint: string): boolean {
-  return isResponsesOnlyByPolicy(endpoint);
 }
 
 /**

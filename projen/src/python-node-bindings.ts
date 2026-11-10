@@ -2,8 +2,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { relativePathWithin } from "@dbx-tools/core";
 import { findFilesSync } from "@dbx-tools/path";
 import { isRecord, toIdentifierWithOptions } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
@@ -139,10 +140,12 @@ export function resolvePythonNodeBindingModules(
 ): ResolvedPythonNodeBindings {
   if (config.modules.length > 0) return config;
   const packageEntrypoint = resolveModule(config.entrypoint, config.projectDirectory);
-  const modules = publicNamespaceExports(packageEntrypoint).filter(
-    (module) =>
-      publicFunctionExports(resolvePythonNodeBindingModule(packageEntrypoint, module)).length > 0,
-  );
+  const modules = publicNamespaceExports(packageEntrypoint)
+    .filter(
+      ({ source }) =>
+        publicFunctionExports(resolveModule(source, dirname(packageEntrypoint))).length > 0,
+    )
+    .map(({ name }) => name);
   return { ...config, modules };
 }
 
@@ -465,7 +468,7 @@ function transitiveSourceFiles(
     const candidate = canonicalPath(pending.pop()!);
     if (
       visited.has(candidate) ||
-      !allowed.some((directory) => containsResolvedPath(directory, candidate))
+      !allowed.some((directory) => relativePathWithin(directory, candidate) !== undefined)
     ) {
       continue;
     }
@@ -493,15 +496,11 @@ export function resolvePythonNodeBindingModule(entrypoint: string, module: strin
   if (!/^[$A-Z_a-z][$\w]*$/.test(module)) {
     throw new Error(`Node binding module must be a TypeScript identifier: ${module}`);
   }
-  const source = readFileSync(entrypoint, "utf8");
-  const escaped = module.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&");
-  const match = new RegExp(`export\\s+\\*\\s+as\\s+${escaped}\\s+from\\s+["']([^"']+)["']`).exec(
-    source,
-  );
-  if (!match?.[1]) {
+  const exported = publicNamespaceExports(entrypoint).find(({ name }) => name === module);
+  if (!exported) {
     throw new Error(`${entrypoint} does not export namespace ${module}`);
   }
-  return resolveModule(match[1], dirname(entrypoint));
+  return resolveModule(exported.source, dirname(entrypoint));
 }
 
 function resolveModule(specifier: string, directory: string): string {
@@ -521,10 +520,6 @@ function canonicalPath(path: string): string {
       candidate = parent;
     }
   }
-}
-
-function containsResolvedPath(parent: string, candidate: string): boolean {
-  return candidate === parent || candidate.startsWith(`${parent}${sep}`);
 }
 
 /** All paths that can change a workspace-backed generated Node runtime. */
@@ -554,18 +549,18 @@ export function affectedPythonNodeBindingProjects(
   const affected = new Set<string>();
   for (const config of configs) {
     const inputs = pythonNodeBindingWatchInputs(config);
-    if (changed.some((candidate) => inputs.some((input) => containsPath(root, input, candidate)))) {
+    if (
+      changed.some((candidate) =>
+        inputs.some(
+          (input) =>
+            relativePathWithin(resolve(root, input), resolve(root, candidate)) !== undefined,
+        ),
+      )
+    ) {
       affected.add(config.project);
     }
   }
   return [...affected].sort();
-}
-
-/** Whether `candidate` is an input path or one of its descendants. */
-function containsPath(root: string, input: string, candidate: string): boolean {
-  const inputPath = resolve(root, input);
-  const candidatePath = resolve(root, candidate);
-  return candidatePath === inputPath || candidatePath.startsWith(`${inputPath}${sep}`);
 }
 
 function validateBindings(configs: readonly ResolvedPythonNodeBindings[]): void {

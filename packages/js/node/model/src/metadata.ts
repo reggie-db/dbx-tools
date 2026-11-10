@@ -62,16 +62,16 @@ import {
   RETIRED_MODELS_URL,
   WEB_SEARCH_MODELS_URL,
   type ModelParamsCatalogue,
-  type ModelParamsSnapshot,
-  type ModelCapabilitiesSnapshot,
+  ModelParamsSnapshotSchema,
+  ModelCapabilitiesSnapshotSchema,
   type ModelCapabilityCatalogue,
   ModelLatencyScoreSnapshotSchema,
   ModelRatingsSnapshotSchema,
-  type ModelRateLimitsSnapshot,
-  type ModelTokenPricesSnapshot,
+  ModelRateLimitsSnapshotSchema,
+  ModelTokenPricesSnapshotSchema,
   type ModelsDevCapabilityCatalogue,
-  type ModelsDevSnapshot,
-  type ReasoningModelsSnapshot,
+  ModelsDevSnapshotSchema,
+  ReasoningModelsSnapshotSchema,
 } from "./metadata-contract.ts";
 import {
   inheritsNativeWebSearch,
@@ -97,14 +97,14 @@ import {
   RETIRED_MODELS_GENERATED_AT,
 } from "./retirement.ts";
 
-const capabilitiesSnapshot = capabilitiesSnapshotJson as ModelCapabilitiesSnapshot;
+const capabilitiesSnapshot = ModelCapabilitiesSnapshotSchema.parse(capabilitiesSnapshotJson);
 const latencySnapshot = ModelLatencyScoreSnapshotSchema.parse(latencySnapshotJson);
 const ratingsSnapshot = ModelRatingsSnapshotSchema.parse(ratingsSnapshotJson);
-const modelParamsSnapshot = modelParamsSnapshotJson as ModelParamsSnapshot;
-const modelsDevSnapshot = modelsDevSnapshotJson as ModelsDevSnapshot;
-const rateLimitsSnapshot = rateLimitsSnapshotJson as ModelRateLimitsSnapshot;
-const tokenPricesSnapshot = tokenPricesSnapshotJson as ModelTokenPricesSnapshot;
-const reasoningSnapshot = reasoningSnapshotJson as ReasoningModelsSnapshot;
+const modelParamsSnapshot = ModelParamsSnapshotSchema.parse(modelParamsSnapshotJson);
+const modelsDevSnapshot = ModelsDevSnapshotSchema.parse(modelsDevSnapshotJson);
+const rateLimitsSnapshot = ModelRateLimitsSnapshotSchema.parse(rateLimitsSnapshotJson);
+const tokenPricesSnapshot = ModelTokenPricesSnapshotSchema.parse(tokenPricesSnapshotJson);
+const reasoningSnapshot = ReasoningModelsSnapshotSchema.parse(reasoningSnapshotJson);
 
 interface MetadataIndex {
   readonly capabilities: {

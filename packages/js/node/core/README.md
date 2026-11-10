@@ -26,7 +26,8 @@ Use this package for:
   the current working directory.
 - Asynchronous Databricks bundle App-resource streaming with native filesystem
   traversal and CLI-resolved configuration.
-- Safe filesystem stat and project naming helpers for CLIs and projen synth.
+- Safe filesystem stat, host-path containment, and project naming helpers for
+  CLIs and projen synth.
 - Layered config from process env, environment-specific `.env` files, and the
   Databricks bundle's App `config.env`.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.

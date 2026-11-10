@@ -1,8 +1,8 @@
 #!/usr/bin/env -S bun
 /** Restart a development command after relevant workspace changes settle. */
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { serializeArgs } from "@dbx-tools/cli-args";
-import { spawn, type ChildProcessResult } from "@dbx-tools/core";
+import { relativePathWithin, spawn, type ChildProcessResult } from "@dbx-tools/core";
 import { watchFiles } from "@dbx-tools/path";
 import { log, sleep, toError } from "@dbx-tools/shared-core";
 import { CommanderError } from "commander";
@@ -124,11 +124,6 @@ export function serializedWatchGlobArgs(options: DevWatchForwardOptions): string
   });
 }
 
-function containsPath(parent: string, candidate: string): boolean {
-  const rel = relative(parent, candidate);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
 function workspacePackages(root: string): WorkspacePackage[] {
   return recordedPackages(root)
     .map(({ dir }) => {
@@ -176,10 +171,10 @@ function commandPackage(
   for (const token of command) {
     if (token.startsWith("-")) continue;
     const candidate = resolve(commandCwd, token);
-    const owner = packages.find(({ dir }) => containsPath(dir, candidate));
+    const owner = packages.find(({ dir }) => relativePathWithin(dir, candidate) !== undefined);
     if (owner) return owner;
   }
-  return packages.find(({ dir }) => containsPath(dir, commandCwd));
+  return packages.find(({ dir }) => relativePathWithin(dir, commandCwd) !== undefined);
 }
 
 /** Source directories most likely to affect the command, using workspace dependency metadata. */

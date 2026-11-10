@@ -65,16 +65,16 @@ export type MemoryPluginOptions = z.input<typeof MemoryPluginOptionsSchema>;
 export type MemoryPluginConfig = BasePluginConfig & MemoryPluginOptions;
 
 /** Resolved Databricks store identity and availability policy. */
-export interface ResolvedDatabricksMemoryOptions {
-  readonly memoryStore: string;
-  readonly mode: "auto" | "required";
-}
+export type ResolvedDatabricksMemoryOptions = Readonly<
+  Required<z.output<typeof DatabricksMemoryOptionsSchema>>
+>;
 
 /** Fully resolved top-level memory configuration. */
-export interface ResolvedMemoryPluginConfig {
+export interface ResolvedMemoryPluginConfig extends Readonly<
+  Pick<z.output<typeof MemoryPluginOptionsSchema>, "saveTurns">
+> {
   readonly databricks: false | ResolvedDatabricksMemoryOptions;
   readonly graphiti: false | GraphitiOptions;
-  readonly saveTurns: "auto" | boolean;
 }
 
 /** JSON Schema published through the AppKit memory plugin manifest. */
