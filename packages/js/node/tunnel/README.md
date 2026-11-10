@@ -22,32 +22,33 @@ await appkit.createApp({
 });
 ```
 
-Supports the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
-based on [upstream Portr](https://github.com/amalshaji/portr), plus
-[FRP](https://github.com/fatedier/frp). Use this library
-when an app needs to be reachable from outside its network - a stakeholder demo,
-a webhook sender that has to reach a dev build, an OAuth redirect that cannot
-point at `localhost` - without publishing the app to anyone who learns the URL.
-It is shaped for Databricks Apps (it honors the `DATABRICKS_APP_PORT` contract
-and lets the platform's own front door through ungated) but the gate itself is
+Supports the [SSE-enabled Portr
+fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2), based on
+[upstream Portr](https://github.com/amalshaji/portr), plus
+[FRP](https://github.com/fatedier/frp). Use this library when an app needs to be
+reachable from outside its network without publishing the app to anyone who
+learns the URL. Examples include a stakeholder demo, a webhook sender that has
+to reach a dev build, and an OAuth redirect that cannot point at `localhost`. It
+is shaped for Databricks Apps (it honors the `DATABRICKS_APP_PORT` contract and
+lets the platform's own front door through ungated) but the gate itself is
 platform-neutral.
 
-The tunnel plugs into `@dbx-tools/appkit`'s `createApp` through its INTERCEPTOR
+The tunnel plugs into `@dbx-tools/appkit`'s `createApp` through its interceptor
 context: `createApp({ interceptor: tunnelInterceptor() })` applies the computed
 `DATABRICKS_HOST`, launches the selected client(s) pointed at the app's public
-port, and binds them so the app and tunnels live and die as one (signals pass
-through, either death tears the pair down). The app is the process. The tunnel
-rides along inside it. Access is granted per email address against an allowlist,
-authenticated by Better Auth email OTP or a passkey. The gate itself is the
-`authGate` AppKit plugin, which registers the login routes and a gating
-middleware on the app's Express server (no separate proxy process).
+port, and binds them to the app process. Signals pass through, and when either
+the app or a tunnel client exits, both stop. The tunnel runs inside the app
+process. Access is granted per email address against an allowlist, authenticated
+by Better Auth email OTP or a passkey. The gate itself is the `authGate` AppKit
+plugin, which registers the login routes and a gating middleware on the app's
+Express server (no separate proxy process).
 
 The package:
 
-- Consumed in-process through the `createApp` interceptor context - no wrapper CLI,
-  no separate process: `createApp({ interceptor: tunnelInterceptor() })`. A no-op
-  when the selected clients are not configured, so it is safe to register
-  unconditionally.
+- Consumed in-process through the `createApp` interceptor context, with no
+  wrapper CLI or separate process:
+  `createApp({ interceptor: tunnelInterceptor() })`. A no-op when the selected clients are not configured, so it is safe to
+  register unconditionally.
 - Uses the shared email-template brand for the code email's color, font, and
   logo. The displayed app name defaults to the dbx-tools brand and can be set
   with `brandName` or `TUNNEL_AUTH_BRAND_NAME`.
@@ -60,21 +61,21 @@ The package:
 - The code appears in the subject, preheader, and body:
   `123456 is your verification code`. Mobile autofill reads an incoming
   notification, and a notification contains the sender, the subject, and a short
-  snippet - nothing else - so a code that lives only in the body is unreachable
+  snippet, so a code that lives only in the body is unreachable
   however cleanly the body is shaped. See
   [Why the code is in the subject](#email-code-subject).
 - The two MIME parts are built separately, on purpose. The HTML card uses the
   configured subject template as its neutral title and shows the code once as a
-  large styled body heading. The `text/plain` part
-  is authored directly, keeping the prompt and the code on one line
-  (`Your verification code is: 123456`) because that is the shape client code
-  detection reads most reliably. A generated text part cannot hold it - the text
-  part is a rendering of the HTML, so the heading's CSS margin arrives as blank
-  lines and autofill stops being offered while the HTML still renders correctly. See
-  `codeEmailTextBody` in the `app` module.
+  large styled body heading. The `text/plain` part is authored directly, keeping
+  the prompt and the code on one line (`Your verification code is: 123456`)
+  because that is the shape client code detection reads most reliably. A
+  generated text part cannot hold it because the text part is a rendering of the
+  HTML, so the heading's CSS margin arrives as blank lines and autofill stops
+  being offered while the HTML still renders correctly. See `codeEmailTextBody`
+  in the `app` module.
 - The sign-in code is system mail: it sends from `no-reply@EMAIL_DOMAIN` (or
   `EMAIL_SYSTEM_FROM`), never a person's address, because a reply to a
-  machine-generated code reaches nobody. `EMAIL_FROM` is not required - see
+  machine-generated code reaches nobody. `EMAIL_FROM` is not required. See
   [@dbx-tools/email](../../node/email#sender-addresses).
 - Better Auth owns users, hashed OTP verification records, sessions, rate
   limits, and passkey credentials. `@dbx-tools/tunnel` supplies only its
@@ -96,28 +97,30 @@ The package:
 - Better Auth rate limiting plus anti-enumeration: the compatibility code
   request always answers `{ ok: true }`, whether or not the address is allowed.
 - Inbound `x-` headers are stripped by default and re-allowed by pattern, so a
-  public caller cannot spoof the headers the app trusts - above all
+  public caller cannot spoof the headers the app trusts, especially
   `x-forwarded-access-token`, which would otherwise let anyone drive the app's
   workspace calls with a pasted token. Add an app's own headers with
   `TUNNEL_FORWARD_HEADERS`.
 - Only Portr traffic is gated. The gate identifies tunnel requests by their
-  `Host` header (`TUNNEL_PUBLIC_DOMAIN`), which portr's client preserves from the
-  public visitor. Platform front-door traffic and any other local caller carry a
-  different `Host` and pass through without a gate, so health checks and the workspace UI
-  keep working. (There is no portr-injected identifying header and no source-IP
-  signal - the client dials the app over plain loopback - so `Host` is the signal.)
+  `Host` header (`TUNNEL_PUBLIC_DOMAIN`), which portr's client preserves from
+  the public visitor. Platform front-door traffic and any other local caller
+  carry a different `Host` and pass through without a gate, so health checks and
+  the workspace UI keep working. Portr injects no identifying header, and the
+  client dials the app over plain loopback, so the source IP is not a signal
+  either.
 - SPA-aware gating: static assets and the login routes stay open so the browser
   can load the client and render the login form. Every other `/api/*` needs a
   valid session cookie or gets `401`. A WebSocket handshake is an ordinary `GET`
   and runs through the same gate.
-- Supervised teardown - `tunnelInterceptor` registers its tunnel supervisor with
+- Supervised teardown: `tunnelInterceptor` registers its tunnel supervisor with
   AppKit's native `shutdown` lifecycle. Core exec terminates each tunnel process
   tree through the child handle's memoized `shutdown()` method.
-- Public liveness probes - while portr is running, the supervisor HEADs the
+- Public liveness probes: while portr is running, the supervisor HEADs the
   public URL. An `x-portr-error: unregistered-subdomain` (or any other
-  `x-portr-error`) kills the child so the forever-loop restarts it. Process-exit
-  supervision alone is not enough: portr can stay alive after the edge drops the
-  registration, leaving the subdomain dark until a full app bounce.
+  `x-portr-error`) stops the child so the restart loop starts it again.
+  Process-exit supervision alone is not enough: portr can stay alive after the
+  edge drops the registration, leaving the subdomain unreachable until the app
+  restarts.
 - The gate fails fast when email is not configured for SMTP, because a gate that
   cannot send codes locks everyone out. `@dbx-tools/email` is an optional peer
   dependency, imported lazily. The app that mounts the gate provides it.
@@ -217,17 +220,17 @@ Resolution order:
    operator-held secret needs no shared cache, and it survives a cache flush.
 2. **A key persisted in AppKit's cache for 30 days.** With a persistent
    `CacheStorage` (Lakebase) the key outlives the process, so cookies stay valid
-   across restarts - which a tunnel does often, since it restarts whenever the app
+   across restarts. A tunnel restarts often because it restarts whenever the app
    it wraps reloads. On the default in-memory cache the key is per-process, the
    same as having no secret at all.
 
-   Getting that persistence is not automatic, and the gate does the work at boot
-   using `lakebaseResolver.applyLakebaseEnv()`: it turns `LAKEBASE_ENDPOINT` into the
+   The gate configures that persistence at boot using
+   `lakebaseResolver.applyLakebaseEnv()`: it turns `LAKEBASE_ENDPOINT` into the
    `PGHOST` / `PGDATABASE` / `PGUSER` the cache's pool also needs. Without them
    AppKit cannot build the pool, silently uses an in-memory cache, and every
-   redeploy signs everyone out - so the startup log says which one you got
-   (`lakebase resolved for the gate cache`, or `the gate cache stays in memory`).
-   Bind a `postgres` resource to the app to get the persistent path.
+   redeploy signs everyone out. The startup log reports which cache is in use
+   (`lakebase resolved for the gate cache`, or
+   `the gate cache stays in memory`). Bind a `postgres` resource to the app to get the persistent path.
 
 3. **An ephemeral per-process key**, when there is no secret and no reachable
    cache. Sessions do not survive a restart, but the gate still serves: the key
@@ -239,22 +242,20 @@ booting together both miss the cache, so both generate. Adopting whatever is
 stored afterward makes them converge on one key instead of each trusting
 the one it minted. Set `TUNNEL_AUTH_JWT_SECRET` to remove the race entirely.
 
-`TUNNEL_AUTH_SESSION_TTL` defaults to the same 30 days the key is stored for, on
-purpose - a key that expired before the cookies it signed would sign everyone out
-for no reason.
+`TUNNEL_AUTH_SESSION_TTL` defaults to the same 30 days the key is stored for. A
+key that expired before the cookies it signed would sign everyone out early.
 
 ## <a id="email-code-subject"></a> Put the email code in the subject
 
-The subject line the gate sends is `123456 is your verification code` -
-`--subject` is the template the code is spliced into, not the literal line.
+The gate sends the subject line `123456 is your verification code`.
+`--subject` sets the template that receives the code.
 
 Mobile autofill reads notification text instead of email body content. iOS scans
-incoming notification text for a code and offers to fill it - natively for
-Messages and Mail, and since iOS 26 for any app's notification, which is what
-finally made Gmail work. A notification carries the sender, the subject, and a
-short snippet. That is all. A code sitting in the body is invisible to it no
-matter how carefully the body is formatted, which is why a correctly shaped
-`text/plain` part alone produced no prompt in Gmail.
+incoming notification text for a code and offers to fill it. iOS does this for
+Messages and Mail, and since iOS 26 for any app's notification, including Gmail.
+A notification carries only the sender, the subject, and a short snippet.
+Autofill cannot read a code that appears only in the body, which is why a
+correctly shaped `text/plain` part alone produced no prompt in Gmail.
 
 So the code goes in both strings a notification actually shows:
 
@@ -285,32 +286,31 @@ TUNNEL_AUTH_SESSION_CUTOFF="now" ...         # sign everyone out on this boot
 
 The value goes through `@dbx-tools/shared-core`'s `object.toDate`, so a date, an
 ISO instant, epoch seconds or millis from `date +%s`, and a relative duration
-(`-30d`, `12 hours ago`) all work - the relative spelling being the one an
-operator usually wants, since "sign out anything older than a month" needs no
-timestamp arithmetic. It works two ways at once, so it holds however the key was
-resolved: the cutoff is part of the key's cache key (moving it orphans the
-previous key), and it is also checked against each token's `iat` (which is what
-makes it bite when `TUNNEL_AUTH_JWT_SECRET` is set and there is no key to
-rotate).
+(`-30d`, `12 hours ago`) all work. A relative duration avoids timestamp
+arithmetic for a request such as "sign out anything older than a month." The
+cutoff applies in two places, so it works however the key was resolved: the
+cutoff is part of the key's cache key (moving it orphans the previous key), and
+it is also checked against each token's `iat` (which makes it take effect when
+`TUNNEL_AUTH_JWT_SECRET` is set and there is no key to rotate).
 
 A future date is clamped to now, because an unclamped one would refuse the
-sessions it is about to mint as well as the old ones - an app nobody can sign in
-to, from a mistyped year. An unparseable value is ignored with a warning rather
-than failing startup: this is the switch that gets a fleet back in.
+sessions it is about to mint as well as the old ones. A mistyped year would then
+make the app impossible to sign in to. An unparseable value is ignored with a
+warning instead of failing startup, so this setting cannot block recovery.
 
 ## Inbound header policy
 
-Tunnel traffic arrives from the public internet, so every header on it is
-attacker-controlled - and the headers an app trusts are exactly the ones a caller
+Tunnel traffic arrives from the public internet, so a caller controls every
+header on it. The headers an app trusts are exactly the ones a caller
 must not be able to write, because the app cannot tell a header the Databricks
 front door set from one a browser typed.
 
-Enumerating headers to remove is a losing game (a denylist is only correct until
-the platform adds a header), so the policy is inverted: **every `x-`-prefixed
-request header is stripped from tunnel traffic unless a pattern allows it.** A
-header nobody thought about is removed rather than trusted. Non-`x-` headers -
-`content-type`, `accept`, `authorization`, `cookie` - are the app's normal input
-and pass through untouched.
+A denylist of headers to remove is correct only until the platform adds a
+header, so the policy uses an allowlist. Every `x-`-prefixed request header is
+stripped from tunnel traffic unless a pattern allows it, so an unlisted header
+is removed. Headers without the `x-` prefix, such as `content-type`, `accept`,
+`authorization`, and `cookie`, are the app's normal input and pass through
+unchanged.
 
 The default allowlist covers the `x-` namespaces this repo's own client sends
 and its own server reads, so a dbx-tools app works behind the tunnel with no
@@ -323,10 +323,10 @@ configuration:
 | `x-requested-with` | the conventional AJAX marker                        |
 
 Add an app's own headers with `TUNNEL_FORWARD_HEADERS` (or `forwardHeaders` on
-`authGate`). Each entry is a literal name, a shell-style glob, or a `/regex/` -
-the same three shapes the email allowlist takes - and the configured list is
-combined with the defaults, so extending it never silently breaks the built-in
-surfaces:
+`authGate`). Each entry is a literal name, a shell-style glob, or a `/regex/`,
+which are the same three shapes the email allowlist accepts. The configured list
+is combined with the defaults, so extending it never silently breaks the
+built-in surfaces:
 
 ```sh
 TUNNEL_FORWARD_HEADERS="x-acme-*, /^x-trace-/, x-tenant" ...
@@ -344,15 +344,15 @@ came from, and on tunnel traffic only the gate may answer that:
 | `x-forwarded-for`, `x-real-ip`        | Client IP. Spoofing forges the audit trail and gives a caller a fresh rate-limit bucket per request.                                                                         |
 | `x-request-id`                        | Request correlation UUID. Forged or colliding ids make logs unreliable.                                                                                                      |
 
-The identity headers are AppKit's OBO contract. The rest are the
-[X-Forwarded-* set that Databricks Apps documents passing to an
+The identity headers are AppKit's OBO contract. The rest are the [X-Forwarded-*
+set that Databricks Apps documents passing to an
 app](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/http-headers),
 plus the conventional `x-forwarded-proto`/`-port`/`x-real-ip` a library may read
-anyway. Dropping the transport headers costs nothing: `xfwd` re-adds them from the
-real socket after the policy runs, so the app sees the honest values instead of the
-caller's claim. Rate limiting reads the client IP before stripping, and takes the
-**rightmost** `x-forwarded-for` entry - the only one portr appended rather than a
-client supplied.
+anyway. Dropping the transport headers loses no information: `xfwd` re-adds them
+from the real socket after the policy runs, so the app sees the honest values
+instead of the caller's claim. Rate limiting reads the client IP before
+stripping, and takes the rightmost `x-forwarded-for` entry, which is the only
+one portr appended instead of a client.
 
 ## Use the gate
 
@@ -379,9 +379,9 @@ await appkit.createApp({
 Override `sendCode` only to deliver through something other than the shared
 transport. The default builds the OTP email (code in the subject + preheader for
 mobile autofill) and sends it as the system sender. `@dbx-tools/email` is an
-optional peer dependency - a tunnel without the gate needs no mail - so the app
-that mounts `authGate` must include it (or run `TUNNEL_INSECURE=true` to skip the
-gate). A missing transport fails fast at boot.
+optional peer dependency because a tunnel without the gate needs no mail. The
+app that mounts `authGate` must include it (or run `TUNNEL_INSECURE=true` to
+skip the gate). A missing transport fails fast at boot.
 
 `GET /api/email/auth/status` is what a client asks before deciding to render a
 login screen, and it answers per request, not per deployment: on a non-tunnel

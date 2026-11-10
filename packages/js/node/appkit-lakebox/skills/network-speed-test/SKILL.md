@@ -3,7 +3,7 @@ name: network-speed-test
 description: Deploy or run a network speed-test app as a Lakebox service using LibreSpeed to measure browser-to-AppKit-to-Lakebox HTTP throughput.
 ---
 
-# Network Speed Test
+# Network speed test
 
 Use the pinned Docker/OCI image through `create_lakebox_service`. Do not run a
 container CLI directly.

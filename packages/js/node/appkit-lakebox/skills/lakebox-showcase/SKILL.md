@@ -3,7 +3,7 @@ name: lakebox-showcase
 description: Recommend and deploy high-value single-user Lakebox browser demos. Use when a user asks what they can do with Lakebox, wants fun Lakebox or Docker demo ideas, or needs a one-port unprivileged showcase.
 ---
 
-# Lakebox Showcase
+# Lakebox showcase
 
 For a broad question such as "what can I do with Lakebox?", recommend a short
 list before deploying anything:

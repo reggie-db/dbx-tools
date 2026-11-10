@@ -34,8 +34,8 @@ Registration provides:
 - Two Mastra tools: `web_search` (answer + citations) and `web_fetch` (page
   contents as readable text or raw HTML), plus the same pair as AppKit agent
   tools through the plugin's `ToolProvider`.
-- `web_search` resolves a dedicated web-search-capable model - defaulting to Gemini,
-  then GPT - independently of the calling agent's chat model (which may not
+- `web_search` resolves a dedicated web-search-capable model (Gemini by default,
+  then GPT) independently of the calling agent's chat model (which may not
   support web search). Loose names (`"gemini"`, `"gpt"`) fuzzy-match the live
   catalogue through [@dbx-tools/model](../model).
 - A built-in provider -> request-fragment map (OpenAI Responses API
@@ -48,10 +48,10 @@ Registration provides:
   mode in force is logged at boot.
 - Per-tool approval gating: gate every call, or (for `web_fetch`) only calls
   whose URL matches a pattern, mapped onto Mastra's `requireApproval`.
-- Every outbound call runs through AppKit's `execute()` chain - per-user cache,
-  retry with jittered backoff, timeout, telemetry - and unwinds on an
-  `AbortSignal`. Each plugin instance keeps its policy and executor separate, so multiple
-  apps in one process remain isolated.
+- Every outbound call runs through AppKit's `execute()` chain (per-user cache,
+  retry with jittered backoff, timeout, and telemetry) and unwinds on an
+  `AbortSignal`. Each plugin instance keeps its policy and executor separate, so
+  multiple apps in one process remain isolated.
 - Page and fallback-result HTML use parser-backed text conversion and selectors,
   including complete HTML entity decoding and malformed-markup recovery.
 
@@ -168,7 +168,7 @@ by the LLM.
 
 Model resolution runs against the live workspace catalogue through
 [@dbx-tools/model](../model), so it only picks an endpoint that is
-actually deployed - a configured id that doesn't exist is never called.
+actually deployed. A configured id that doesn't exist is never called.
 
 ### Scrape fallback
 
@@ -285,7 +285,7 @@ plugin.webSearch({ urlPolicy: "allowlist", allowedUrls: ["*.databricks.com"] });
 
 Both tools run without approval by default. Pass `approval` to a tool (or set it
 plugin-wide) to require approval. `true` gates every call. A URL pattern (or
-list) gates only calls whose URL matches - a `web_fetch` is evaluated precisely
+list) gates only calls whose URL matches. A `web_fetch` is evaluated precisely
 against its target URL, while a `web_search` (whose result URLs are unknown
 before the call) treats a pattern gate as "gate every call".
 
@@ -308,10 +308,10 @@ plugin.webSearch({ approval: ["*.internal.example.com", "*.corp.example.com"] })
 tool.webFetchTool({ config: { approval: ["*.internal.example.com"] } });
 ```
 
-Every spelling normalizes to one of three modes - `{ mode: "none" }`,
-`{ mode: "always" }`, `{ mode: "urls", patterns }` - which is what the resolved
-config carries and the boot log reports. Approval uses the same glob syntax as
-the allowlist, so the two policies read identically.
+Every spelling normalizes to one of three modes (`{ mode: "none" }`,
+`{ mode: "always" }`, or `{ mode: "urls", patterns }`), which is what the
+resolved config carries and the boot log reports. Approval uses the same glob syntax as the
+allowlist, so the two policies read identically.
 
 ## Configuration
 
@@ -351,11 +351,11 @@ built-in default.
 The plugin's `maxCitations` / `fetchMaxLength` are hard caps: a per-call request
 may narrow them but never exceed them.
 
-Every outbound call - the serving POST, a page fetch, the scrape fallback -
-runs through the plugin's `execute()` chain, so all three are cached, retried
-with jittered backoff, timed out, and traced. The cache is namespaced per user,
-so an on-behalf-of result never crosses identities. See `defaults.ts` for the
-TTLs and retry budgets and why each was chosen.
+Every outbound call, including the serving POST, a page fetch, and the scrape
+fallback, runs through the plugin's `execute()` chain, so all three are cached,
+retried with jittered backoff, timed out, and traced. The cache is namespaced
+per user, so an on-behalf-of result never crosses identities. See `defaults.ts`
+for the TTLs and retry budgets and why each was chosen.
 
 OpenAI Responses web searches stream native search, page-read, and completion
 status through the Mastra tool writer. The common tool-session pill updates

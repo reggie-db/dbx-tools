@@ -242,14 +242,13 @@ tools (`ask_genie`, `get_space_description`, `get_space_serialized`,
 `get_statement`, `prepare_chart`, `render_data`, `summarize`) are reachable only
 from a Mastra agent turn this plugin serves.
 
-That is a property of the tools, not a gap. Each one reads the per-request
-Mastra execution context - the AppKit user stamped on `RequestContext`, the
-`writer` that streams Genie progress events to the chat, the per-call
-`abortSignal` - and refuses to run without it. An AppKit `ToolProvider` call
-carries none of that, so exposing these through one would advertise tools that
-cannot work. Reach for
-[native AppKit Agents](https://developers.databricks.com/docs/appkit/v0) when you
-want your agent tools callable by other AppKit hosts.
+Each tool reads the per-request Mastra execution context and refuses to run
+without it. That context includes the AppKit user stamped on `RequestContext`,
+the `writer` that streams Genie progress events to the chat, and the per-call
+`abortSignal`. An AppKit `ToolProvider` call carries none of that, so exposing
+these through one would advertise tools that cannot work. Reach for [native
+AppKit Agents](https://developers.databricks.com/docs/appkit/v0) when you want
+your agent tools callable by other AppKit hosts.
 
 Nothing here can be auto-inherited by another host as a side effect: with no
 AppKit `ToolRegistry`, there is no `autoInheritable` surface to opt in or out
@@ -887,9 +886,9 @@ to a line with an `areaStyle`, `horizontalBar` to a bar with swapped axes,
 `combo` to per-series types, and `waterfall` to the stacked transparent-helper
 bars Echarts documents, since it has no waterfall series.
 
-For a chart the plan cannot express at all - sankey, boxplot, candlestick,
-sunburst, gauge, network graph, calendar, parallel coordinates, a `custom`
-series - the planner picks `custom` and hand-writes the entire Echarts option
+For a chart the plan cannot express, such as a sankey, boxplot, candlestick,
+sunburst, gauge, network graph, calendar, parallel coordinates, or `custom`
+series, the planner picks `custom` and hand-writes the entire Echarts option
 into the plan's `option` field. That option is passed through as-is: no axes,
 tooltip, or legend are grafted on, and only a centered title is filled in when
 the object omits one. A configured `brand` theme still applies underneath, so
@@ -927,13 +926,14 @@ many-series charts stay legible) and the `typography.sans` font stack. Charts
 render to canvas, so this is applied server-side on the Echarts option rather
 than through the browser `[data-brand]` CSS bridge.
 
-What the planner does **not** set is any text color. A spec is planned here and
+The planner does not set any text color. A spec is planned here and
 read later in a browser whose light/dark theme the server cannot know, so the
 brand's single (light) foreground would produce near-black labels on a dark chat
 surface. The renderer resolves tick labels, axis names, grid lines, and the
-tooltip from AppKit's live CSS tokens instead - see
-[@dbx-tools/ui-mastra](../../ui/mastra)'s chart theming. Brand identity is the
-same in either mode. Chrome is not.
+tooltip from AppKit's live CSS tokens instead. See
+[@dbx-tools/ui-mastra](../../ui/mastra)'s chart theming. Brand colors and fonts
+are the same in light and dark mode. Axis, grid, and tooltip colors follow the
+active theme.
 
 ## Model selection
 
@@ -1006,7 +1006,7 @@ encrypted reasoning and item ids from the outbound prompt while retaining the
 persisted reasoning, answer text, and tool history.
 
 The plugin also serves `GET /default-model` (and `/default-model/:agentId`),
-returning `{ agentId, model, displayName }` - the static serving-endpoint an
+returning `{ agentId, model, displayName }`: the static serving endpoint an
 agent falls back to when the client pins no model, plus its humanized label.
 `model` / `displayName` are `null` when the agent resolves its model
 dynamically at call time. This lets a model picker label its default option
@@ -1128,8 +1128,8 @@ MLflow traces.
 
 ### Export Databricks Apps traces to Unity Catalog
 
-Managed MLflow has **no** OTLP ingest endpoint. Do not set
-`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the workspace host - probes of
+Managed MLflow has no OTLP ingest endpoint. Do not set
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the workspace host. Probes of
 `/api/2.0/mlflow/v1/traces`, `/otlp/v1/traces`, and similar paths 404. The
 mechanism that works is Databricks Apps telemetry: declare
 `telemetry_export_destinations` on the app resource so the platform injects a
@@ -1215,8 +1215,8 @@ that are safe outside an in-process chat turn.
 ## Drive a turn outside the routes
 
 Another plugin (or a scheduled job) can run an agent turn directly, but a raw
-`agent.generate(prompt)` loses everything the HTTP middleware stamps - most
-visibly the AppKit user, which every user-scoped tool reads. `ask_genie` then
+`agent.generate(prompt)` loses everything the HTTP middleware stamps,
+including the AppKit user, which every user-scoped tool reads. `ask_genie` then
 fails with "invoke the tool from an agent turn served by the mastra plugin", so
 the turn answers "the data source is unreachable" where the chat routes answer
 with real data.

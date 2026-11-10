@@ -3,7 +3,7 @@ name: realtime-whiteboard
 description: Deploy or run a realtime collaborative whiteboard app as a Lakebox service using WBO and user-scoped WebSocket routing.
 ---
 
-# Realtime Whiteboard
+# Realtime whiteboard
 
 Use the pinned Docker/OCI image through `create_lakebox_service`. Do not run a
 container CLI directly.

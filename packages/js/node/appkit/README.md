@@ -399,10 +399,10 @@ behavior depends entirely on `NODE_ENV`:
 | `development` | logs a warning, silently runs as the service principal |
 | anything else | throws `AuthenticationError: Missing user token`       |
 
-That throw is right for an app behind the front door, where a missing token means
-something is broken. It is fatal for an app whose traffic legitimately arrives
-without one - a public tunnel where callers authenticate by email code
-([@dbx-tools/tunnel](../../node/tunnel)), or an authenticated webhook or bot
+That throw is right for an app behind the front door, where a missing token
+means something is broken. It is fatal for an app whose traffic legitimately
+arrives without one, such as a public tunnel where callers authenticate by email
+code ([@dbx-tools/tunnel](../../node/tunnel)) or an authenticated webhook or bot
 channel. Those apps must not run with `NODE_ENV=development` only to get the
 fallback, because that flag also relaxes secure cookies and unlocks other
 dev-only escape hatches.
@@ -426,20 +426,20 @@ const rows = await scoped.executeQuery(sql);
 | `auto`              | OBO when the request carries a usable token, service principal otherwise.    |
 
 `auto` decides per request, not per boot, because one container can serve both
-doors at once - the tunnel gate and the platform front door share a port. A
-boot-time flag would have to be wrong for one of them. An unrecognized configured
-value throws a `ConfigurationError` rather than falling back, because a typo
-(`"obo"`, `"sp"`) would otherwise keep serving the very error the option was set
-to avoid.
+doors at once: the tunnel gate and the platform front door share a port. A
+boot-time flag would have to be wrong for one of them. An unrecognized
+configured value throws a `ConfigurationError` rather than falling back, because
+a typo (`"obo"`, `"sp"`) would otherwise keep serving the very error the option
+was set to avoid.
 
-Running as the service principal does not change which user owns the request. The
-caller still arrives on `x-forwarded-user` / `x-forwarded-email` (read them with
-`identity.requestUserId()` / `requestUserEmail()`), so memory threads, cache
-namespaces, and trace attribution stay per-user - only the Databricks credential
-is shared. `appkit.createApp()` stamps the forwarded email, or user id when no
-email is present, onto every native HTTP request root as OpenTelemetry
-`user.id`. `@dbx-tools/appkit-mastra` exposes the credential choice as its
-`genieIdentity` option.
+Running as the service principal does not change which user owns the request.
+The caller still arrives on `x-forwarded-user` / `x-forwarded-email` (read them
+with `identity.requestUserId()` / `requestUserEmail()`), so memory threads,
+cache namespaces, and trace attribution stay per-user. Only the Databricks
+credential is shared. `appkit.createApp()` stamps the forwarded email, or user
+id when no email is present, onto every native HTTP request root as
+OpenTelemetry `user.id`. `@dbx-tools/appkit-mastra` exposes the credential
+choice as its `genieIdentity` option.
 
 ## Modules
 

@@ -167,8 +167,8 @@ title and description. When the workspace rejects the serialized request for
 lack of permission, `getGenieSpace()` retries once without it and logs
 `serialized-space:forbidden`, so an app service principal holding only `Can Run`
 still resolves the space and reports no starter questions. Every other
-failure - a cancelled request, a missing space, a retry that also fails - is
-thrown.
+failure, such as a cancelled request, a missing space, or a retry that also
+fails, is thrown.
 
 ## Options
 

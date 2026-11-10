@@ -51,12 +51,12 @@ The extension adds:
 - Embedding-model resolution for index creation reuses
   [@dbx-tools/model](../model): a loose name fuzzy-matches the live catalogue,
   or the best embedding endpoint is chosen automatically.
-- Index lifecycle helpers: `createIndex` / `ensureIndex` (Delta
-  Sync from a source table, self-managed direct-access with a dimension, or a
-  managed direct-access index that embeds a text column - no Delta table or
+- Index lifecycle helpers: `createIndex` / `ensureIndex` (Delta Sync from a
+  source table, self-managed direct-access with a dimension, or a managed
+  direct-access index that embeds a text column and needs no Delta table or
   warehouse), `provision` (ensure + seed in one idempotent call), `syncIndex`,
-  `deleteIndex`, `listIndexes`, and `ensureEndpoint` - each inferring the
-  endpoint, embedding model, primary key, and columns from package defaults.
+  `deleteIndex`, `listIndexes`, and `ensureEndpoint`. Each infers the endpoint,
+  embedding model, primary key, and columns from package defaults.
 - Provision an index on boot with `ensureOnSetup`: the plugin provisions the
   endpoint + index and seeds documents in the background using the native AppKit
   workspace client, so a fresh deployment is searchable with no manual setup.
@@ -220,7 +220,7 @@ AppKit workspace client. It creates the endpoint and index when absent and
 seeds documents only when the index is empty. This work runs in the background,
 so a slow first-time endpoint build does not block the server.
 The default is a managed direct-access index, so the seed rows are plain
-objects and search-by-text works immediately - no Delta table, no warehouse.
+objects and search-by-text works without a Delta table or warehouse.
 
 ```ts
 search({
@@ -256,12 +256,12 @@ to `on-behalf-of-user` for OBO query/write routes or leave it at
 Queries are compiled from the search box rather than handed to
 `websearch_to_tsquery`, which is too literal for type-ahead in two ways:
 
-- **Punctuation.** Postgres indexes `sample-store-intelligence` as the
-  compound lexeme _plus_ its parts, but compiles a hyphenated **query** to the
-  compound alone - so `store-intelligence` matches nothing while
+- **Punctuation:** Postgres indexes `sample-store-intelligence` as the
+  compound lexeme plus its parts, but compiles a hyphenated query to the
+  compound alone. As a result, `store-intelligence` matches nothing while
   `store intelligence` matches everything. The query is split on punctuation,
   so both spellings (and `.` / `_` in a table reference) behave the same.
-- **Prefixes.** Every term is matched as a prefix, so `intel` reaches
+- **Prefixes:** Every term is matched as a prefix, so `intel` reaches
   `intelligence` and `store intel` finds `sample-store-intelligence`.
 
 All terms must match. When none do, search relaxes instead of returning an

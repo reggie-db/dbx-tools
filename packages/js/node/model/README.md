@@ -263,10 +263,10 @@ const response = await fetch(invoke.invocationsUrl(host, endpointId), {
 ```
 
 Use `invoke` when you need to issue your own request against a serving endpoint
-with an OpenAI-shaped body - a proxy, a passthrough route, a streaming client -
-rather than the SDK's typed `servingEndpoints.query`. Mint `authHeaders()` per
-request: the SDK refreshes the underlying token as it nears expiry, so you never
-track lifetimes yourself.
+with an OpenAI-shaped body, such as from a proxy, a passthrough route, or a
+streaming client, rather than the SDK's typed `servingEndpoints.query`. Mint
+`authHeaders()` per request: the SDK refreshes the underlying token as it nears
+expiry, so you never track lifetimes yourself.
 
 Every serving path this repo talks to is a constant here, with a matching URL
 builder: `INVOCATIONS_SUFFIX` / `invocationsUrl()`, `RESPONSES_PATH` /

@@ -270,9 +270,10 @@ await processLock.withProcessLock(["cache", name], async () => {
 
 `withProcessLock()` runs the callback while holding the named lock, releasing it
 when the callback settles. Callers sharing a key are serialized. Distinct keys
-run concurrently. The key is any value with a stable identity - a string, a
-`["invoice", id]` tuple, a config object - canonicalized by `object.toStableKey`,
-so structure counts: `["invoice", 7]` and `"invoice_7"` are different locks.
+run concurrently. The key is any value with a stable identity, such as a string,
+an `["invoice", id]` tuple, or a config object. `object.toStableKey`
+canonicalizes it, so structure counts: `["invoice", 7]` and `"invoice_7"` are
+different locks.
 
 Use it instead of a module-level promise chain when worker threads are involved.
 A promise chain only serializes the thread it lives on, so a worker pool runs one
@@ -287,20 +288,19 @@ import { Worker } from "node:worker_threads";
 new Worker(url, processLock.processLockWorkerOptions({ workerData: { tenant } }));
 ```
 
-That preserves your own `workerData` and `transferList`, and lets the worker lock
-during module initialization. For a worker you did not construct, call
+That preserves your own `workerData` and `transferList`, and lets the worker
+lock during module initialization. For a worker you did not construct, call
 `attachProcessLock(worker)` and have the worker `await processLockAttached()`
-first - the port arrives by message, so it is not available quite as early.
+first. The port arrives by message, so it is not available as early.
 
 A thread that exits while holding a lock releases it, so a crashed worker cannot
-wedge a key. Locks are held only as long as the callback runs, and an idle lock
-never keeps the process from exiting.
+hold a key indefinitely. Locks are held only as long as the callback runs, and
+an idle lock never keeps the process from exiting.
 
-The scope is the THREADS of one process - `withProcessLock` shares nothing with a
-second `node` invocation or another replica. When the critical section spans a
-deployment, use
-[@dbx-tools/postgres](../postgres)'s `withAdvisoryLock`, which puts the arbiter
-in PostgreSQL where every replica can see it.
+The lock scope is the threads of one process. `withProcessLock` shares nothing
+with a second `node` invocation or another replica. When the critical section
+spans a deployment, use [@dbx-tools/postgres](../postgres)'s `withAdvisoryLock`,
+which puts the arbiter in PostgreSQL where every replica can see it.
 
 ## Serialize work across processes
 

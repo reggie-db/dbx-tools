@@ -179,10 +179,10 @@ HTML body presents the code once.
 ### Control the plain-text part
 
 By default both MIME alternatives are rendered from one React Email tree, so the
-`text/plain` part is a rendering of the HTML - it carries the brand header and
-footer, and CSS margin becomes blank lines. That is right for prose and wrong for
-content that a client parses. A fourth argument replaces only that part, leaving the
-branded HTML untouched:
+`text/plain` part is a rendering of the HTML. It carries the brand header and
+footer, and CSS margin becomes blank lines. That is right for prose and wrong
+for content that a client parses. A fourth argument replaces only that part,
+leaving the branded HTML untouched:
 
 ```ts
 await transport.sendEmail(message, from, undefined, {
@@ -192,9 +192,9 @@ await transport.sendEmail(message, from, undefined, {
 
 The motivating case is a one-time code: client code detection reads the code out
 of the prompt line, and a styled `<h2>` code renders two blank lines below the
-prompt, so autofill stops being offered even though the HTML renders correctly. Keep
-the same information in both parts - a text alternative that disagrees with the
-HTML reads as phishing to spam filters. See
+prompt, so autofill stops being offered even though the HTML renders correctly.
+Keep the same information in both parts. Spam filters can treat a text
+alternative that disagrees with the HTML as phishing. See
 [@dbx-tools/tunnel](../../node/tunnel) for a gate that does this.
 
 ### Control the preheader (and the push notification)
@@ -332,15 +332,15 @@ sender.assertSenderAllowed(from, resolved.allowedSenders);
 `domain` is the only sender setting a deployment needs. The `From` for a normal
 send is the on-behalf-of user's local part re-homed on it, so a recipient can
 reply to the person who caused the message. `from` overrides that with one fixed
-address and is entirely optional - set it only when every message really should
+address and is optional. Set it only when every message really should
 come from a single mailbox.
 
-Mail that no user asked for - a sign-in code, a password reset, an alert - is
-system mail, and a reply to it reaches nobody. It sends from
+Mail that no user asked for, such as a sign-in code, a password reset, or an
+alert, is system mail, and a reply to it reaches nobody. It sends from
 `no-reply@<domain>` instead, which is also what `resolveSenderAddress()` returns
 when there is no user in scope, so a service-context send never leaks a person's
-address onto machine mail. That default outranks `from` on purpose (a fixed
-`from` is normally a human or team address). Name the address yourself with
+address onto machine mail. That default outranks `from` because a fixed
+`from` is normally a human or team address. Name the address yourself with
 `systemFrom` / `EMAIL_SYSTEM_FROM` to route those replies to a monitored
 `support@`, or to use a different local part. The system sender is
 folded into the effective allowlist, so the deny-by-default policy never blocks

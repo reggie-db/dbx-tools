@@ -317,14 +317,14 @@ development dependency without turning the peer into a runtime dependency.
 `applyToProjects` combines its globs with AND logic. Prefix a glob with `!` to
 negate it. The resulting predicate selects DBXTools child packages and applies
 the callback as a `constructs` mixin across the subtree. Filter on the folder
-(`path`), the tags (`tags`), or
-the name from whichever angle fits: `name` matches the raw projen name verbatim,
-while `identifierPackageName`, `identifierScope`, and `identifierName` match the
-parsed `@scope/name`, its scope, and its unscoped half. Two flags widen the
-selection past DBXTools children - `includeRoots` for the tree root and
-`includeNonDBXToolsProjects` for plain projen projects (which widens the callback
-parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
-`project.with(...)` only when you need a predicate the filters cannot express.
+(`path`), the tags (`tags`), or the name from whichever angle fits: `name`
+matches the raw projen name verbatim, while `identifierPackageName`,
+`identifierScope`, and `identifierName` match the parsed `@scope/name`, its
+scope, and its unscoped half. Two flags widen the selection past DBXTools
+children: `includeRoots` for the tree root and `includeNonDBXToolsProjects` for
+plain projen projects (which widens the callback parameter to `Project`). Drop
+to `mixin.create(predicate, fn)` + `project.with(...)` only when you need a
+predicate the filters cannot express.
 
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `app`. Repo-specific mixins layer package-specific dependencies,
@@ -443,7 +443,7 @@ rootProject.synth();
 `generateCodegen()` reads the serialized `dbxToolsConfig.codegenInputs` and
 writes generated schema modules. They are written read-only, and the root
 ESLint task runs with an explicit separate fix task, so each generated module is
-added to `ignorePatterns` at synth - named individually using
+added to `ignorePatterns` at synth. Each module is named individually using
 `codegen.codegenModulePaths()`, never as a blanket `<package>/src/**`. A codegen
 package may hold hand-written modules beside its generated ones, and those must
 stay linted.
@@ -496,9 +496,9 @@ rootProject.synth();
 ```
 
 `allowBuild` writes pnpm's `allowBuilds` map rather than projen's own
-`allowScripts` option, which for pnpm renders `onlyBuiltDependencies` - a key
-pnpm does not read, so the list would leave every build script skipped.
-Only allowances are declared. A dependency that is never allowed needs no entry
+`allowScripts` option. For pnpm, that option renders `onlyBuiltDependencies`, a
+key pnpm does not read, so the list would leave every build script skipped. Only
+allowances are declared. A dependency that is never allowed needs no entry
 because pnpm warns and moves on.
 
 The engine also applies `catalogMode: manual`, which keeps `pnpm add` out of the
