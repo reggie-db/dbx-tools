@@ -92,7 +92,7 @@
     "eslint-plugin-prettier": "^5.5.6",
     "marked": "catalog:",
     "prettier": "^3.9.4",
-    "projen": "^0.103.27",
+    "projen": "^0.104.26",
     "typescript": "^5.9.3",
     "whatwg-url": "14.2.0",
     "yaml": "catalog:",

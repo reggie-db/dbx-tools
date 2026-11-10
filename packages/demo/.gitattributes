@@ -15,7 +15,7 @@
 /LICENSE linguist-generated
 /package.json linguist-generated
 /test/tsconfig.json linguist-generated linguist-language=JSON-with-Comments
-/tsconfig.client.json linguist-generated
+/tsconfig.client.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.json linguist-generated linguist-language=JSON-with-Comments
-/tsconfig.server.json linguist-generated
-/tsconfig.shared.json linguist-generated
+/tsconfig.server.json linguist-generated linguist-language=JSON-with-Comments
+/tsconfig.shared.json linguist-generated linguist-language=JSON-with-Comments

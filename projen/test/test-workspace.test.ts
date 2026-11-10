@@ -19,10 +19,18 @@ function fixture(): string {
   return root;
 }
 
+function writeWorkspace(root: string, members: readonly string[]): void {
+  writeFileSync(
+    join(root, "pnpm-workspace.yaml"),
+    `packages:\n${members.map((member) => `  - ${JSON.stringify(member)}`).join("\n")}\n`,
+  );
+}
+
 it("builds workspace and reverse dependency edges from manifests", () => {
   const root = fixture();
   const members = ["packages/core", "packages/feature", "packages/app"];
-  writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: members }));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: ["packages/ignored"] }));
+  writeWorkspace(root, members);
   for (const member of members) mkdirSync(join(root, member), { recursive: true });
   writeFileSync(join(root, members[0]!, "package.json"), JSON.stringify({ name: "@fixture/core" }));
   writeFileSync(
@@ -64,6 +72,29 @@ it("builds workspace and reverse dependency edges from manifests", () => {
   });
 });
 
+it("skips unreadable recorded manifests without changing valid graph edges", () => {
+  const root = fixture();
+  writeWorkspace(root, ["packages/missing", "packages/malformed", "packages/valid"]);
+  mkdirSync(join(root, "packages/malformed"), { recursive: true });
+  writeFileSync(join(root, "packages/malformed/package.json"), "{");
+  mkdirSync(join(root, "packages/valid"), { recursive: true });
+  writeFileSync(
+    join(root, "packages/valid/package.json"),
+    JSON.stringify({ name: "@fixture/valid" }),
+  );
+
+  assert.deepEqual(workspaceGraph(root), {
+    packages: [
+      {
+        name: "@fixture/valid",
+        path: "packages/valid",
+        dependencies: [],
+        reverseDependencies: [],
+      },
+    ],
+  });
+});
+
 for (const mode of ["all", "unit", "changed"]) {
   it(`runs JavaScript documentation tests in ${mode} mode and skips dependency tests`, () => {
     const root = fixture();
@@ -71,7 +102,8 @@ for (const mode of ["all", "unit", "changed"]) {
     mkdirSync(join(root, "test"));
     mkdirSync(join(root, "scripts"));
     mkdirSync(join(root, "docs/scripts/node_modules/dependency"), { recursive: true });
-    writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: [] }));
+    writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: ["packages/ignored"] }));
+    writeWorkspace(root, []);
     writeFileSync(
       join(root, "test/root.test.ts"),
       'import { writeFileSync } from "node:fs";\nimport { it } from "node:test";\nit("runs root tests", () => writeFileSync("root-test-ran", "yes"));\n',

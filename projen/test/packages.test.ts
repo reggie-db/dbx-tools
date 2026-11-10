@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { DiscoveredPackage, recordedRoots } from "../src/packages.ts";
+import {
+  DiscoveredPackage,
+  recordedPackages,
+  recordedRoots,
+  workspaceDependencyNames,
+} from "../src/packages.ts";
 import { DBXToolsNodeProject } from "../src/project-js.ts";
 
 let outdir: string;
@@ -58,6 +63,46 @@ describe("recordedRoots", () => {
         dbxToolsConfig?: { packageRoots?: string[] };
       };
       assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("recordedPackages", () => {
+  it("reads each recorded member's name, manifest, tags, and dependency fields", () => {
+    const root = mkdtempSync(join(tmpdir(), "recorded-packages-"));
+    try {
+      mkdirSync(join(root, "packages/core"), { recursive: true });
+      writeFileSync(
+        join(root, "pnpm-workspace.yaml"),
+        'packages:\n  - "packages/core"\n  - "packages/missing"\n',
+      );
+      writeFileSync(
+        join(root, "packages/core/package.json"),
+        JSON.stringify({
+          name: "@fixture/core",
+          dependencies: { runtime: "1" },
+          optionalDependencies: { optional: "1" },
+          peerDependencies: { peer: "1" },
+          devDependencies: { development: "1" },
+          dbxToolsConfig: { tags: ["shared"] },
+        }),
+      );
+
+      const [core, missing] = recordedPackages(root);
+      assert.equal(core?.name, "@fixture/core");
+      assert.equal(core?.manifest?.name, "@fixture/core");
+      assert.deepEqual(core?.tags, ["shared"]);
+      assert.deepEqual(workspaceDependencyNames(core!.manifest!), ["optional", "peer", "runtime"]);
+      assert.deepEqual(workspaceDependencyNames(core!.manifest!, { includeDev: true }), [
+        "development",
+        "optional",
+        "peer",
+        "runtime",
+      ]);
+      assert.equal(missing?.name, undefined);
+      assert.equal(missing?.manifest, undefined);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

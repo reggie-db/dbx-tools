@@ -253,14 +253,8 @@ function dependencyName(spec: string): string {
 /** Add an optional peer and make it available while developing the package. */
 export function addOptionalPeer(pkg: javascript.NodeProject, spec: string): void {
   const name = dependencyName(spec);
-  const current = isRecord(pkg.package.manifest.peerDependenciesMeta)
-    ? pkg.package.manifest.peerDependenciesMeta
-    : {};
   pkg.addPeerDeps(spec);
-  pkg.package.addField("peerDependenciesMeta", {
-    ...current,
-    [name]: { optional: true },
-  });
+  pkg.package.addPeerDependencyMeta(name, { optional: true });
   pkg.addDevDeps(spec);
 }
 
@@ -362,9 +356,7 @@ export function srcFolderExports(
  * `.tsx` in its graph: it selects how JSX syntax COMPILES and adds no lib, no
  * global, and no type dependency on its own.
  */
-const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions & {
-  rewriteRelativeImportExtensions: boolean;
-} = {
+const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   module: "ESNext",
   moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
   skipLibCheck: true,
@@ -998,9 +990,9 @@ class GeneratedSource extends Component {
  * and ran no package tests. Compilation groups ordinary package tsconfigs into
  * a few TypeScript processes and runs custom package lifecycles alongside them.
  * Tests use a small number of root runner groups, skip packages without tests,
- * and expose focused, changed, unit, integration, and full tiers. The test task
- * reads the current workspace list from `package.json`, so a newly added member
- * needs no re-synth.
+ * and expose focused, changed, unit, integration, and full tiers. The compile
+ * and test tasks read Projen's generated `pnpm-workspace.yaml`, so a newly
+ * recorded member needs no additional task configuration.
  */
 class WorkspaceValidationTasks extends Component {
   private configured = false;

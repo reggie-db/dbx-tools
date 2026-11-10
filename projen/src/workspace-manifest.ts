@@ -18,6 +18,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "@dbx-tools/core";
+import { readPackageManifest, recordedPackages } from "./packages.ts";
 
 const DEPENDENCY_FIELDS = [
   "dependencies",
@@ -72,13 +73,13 @@ export async function withMaterializedWorkspaceManifests<T>(
   callback: () => Promise<T>,
 ): Promise<T> {
   const rootManifestPath = resolve(root, "package.json");
-  const rootManifest = readManifest(rootManifestPath);
-  const workspaces = Array.isArray(rootManifest.workspaces)
-    ? rootManifest.workspaces.filter((value): value is string => typeof value === "string")
-    : [];
+  const rootManifest = readPackageManifest(root);
+  if (!rootManifest) {
+    throw new Error(`Could not read workspace manifest at ${rootManifestPath}`);
+  }
   const originals = [
     rootManifestPath,
-    ...workspaces.map((workspace) => resolve(root, workspace, "package.json")),
+    ...recordedPackages(root).map((pkg) => resolve(pkg.dir, "package.json")),
   ].map(storeManifest);
 
   try {
@@ -156,10 +157,6 @@ function materializeDependency(
   if (selector === "*" || !selector) return version;
   if (selector === "^" || selector === "~") return `${selector}${version}`;
   return selector;
-}
-
-function readManifest(path: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
 
 function storeManifest(path: string): StoredManifest {

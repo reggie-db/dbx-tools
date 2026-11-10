@@ -12,11 +12,19 @@ afterEach(() => {
   for (const root of fixtures.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+function writeWorkspace(root: string, members: readonly string[]): void {
+  writeFileSync(
+    join(root, "pnpm-workspace.yaml"),
+    `packages:\n${members.map((member) => `  - ${JSON.stringify(member)}`).join("\n")}\n`,
+  );
+}
+
 it("batches plain TypeScript tasks and preserves custom and newly added workspaces", () => {
   const root = mkdtempSync(join(tmpdir(), "workspace-compile-"));
   fixtures.push(root);
   const members = ["packages/plain", "packages/custom", "packages/lifecycle", "packages/no-script"];
-  writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: members }));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: ["packages/ignored"] }));
+  writeWorkspace(root, members);
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: { noEmit: true } }));
   for (const member of members) mkdirSync(join(root, member, ".projen"), { recursive: true });
   writeFileSync(
@@ -65,11 +73,30 @@ it("batches plain TypeScript tasks and preserves custom and newly added workspac
     join(root, "packages/added/package.json"),
     JSON.stringify({ name: "@fixture/added", scripts: { compile: "bun build.ts" } }),
   );
-  writeFileSync(
-    join(root, "package.json"),
-    JSON.stringify({ workspaces: [...members, "packages/added"] }),
+  writeWorkspace(root, [...members, "packages/added"]);
+  assert.deepEqual(
+    compilePlan(root).customPackages.find(({ name }) => name === "@fixture/added"),
+    { name: "@fixture/added", directory: join(root, "packages/added") },
   );
-  assert.equal(compilePlan(root).customPackages.at(-1)?.name, "@fixture/added");
+});
+
+it("skips missing and half-written recorded manifests consistently", () => {
+  const root = mkdtempSync(join(tmpdir(), "workspace-compile-"));
+  fixtures.push(root);
+  const members = ["packages/missing", "packages/malformed", "packages/valid"];
+  writeWorkspace(root, members);
+  mkdirSync(join(root, "packages/malformed"), { recursive: true });
+  writeFileSync(join(root, "packages/malformed/package.json"), "{");
+  mkdirSync(join(root, "packages/valid/.projen"), { recursive: true });
+  writeFileSync(
+    join(root, "packages/valid/package.json"),
+    JSON.stringify({ name: "@fixture/valid", scripts: { compile: "bun build.ts" } }),
+  );
+
+  assert.deepEqual(compilePlan(root), {
+    typescriptConfigs: [],
+    customPackages: [{ name: "@fixture/valid", directory: join(root, "packages/valid") }],
+  });
 });
 
 for (const taskName of ["pre-compile", "compile", "post-compile"]) {
@@ -85,7 +112,7 @@ for (const taskName of ["pre-compile", "compile", "post-compile"]) {
       fixtures.push(root);
       const member = "packages/conditional";
       mkdirSync(join(root, member, ".projen"), { recursive: true });
-      writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: [member] }));
+      writeWorkspace(root, [member]);
       writeFileSync(
         join(root, member, "package.json"),
         JSON.stringify({ name: "@fixture/conditional", scripts: { compile: "projen compile" } }),

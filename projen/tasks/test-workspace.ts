@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { spawnSync, spawn } from "@dbx-tools/core";
 import { findFilesSync } from "@dbx-tools/path";
@@ -6,18 +6,9 @@ import { log, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
 import { TaskRootOptionSchema } from "./options.ts";
-import { toPosix } from "../src/packages.ts";
+import { recordedPackages, toPosix, workspaceDependencyNames } from "../src/packages.ts";
 
 const logger = log.logger("projen:test");
-
-interface PackageManifest {
-  readonly name?: string;
-  readonly workspaces?: readonly string[];
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly optionalDependencies?: Readonly<Record<string, string>>;
-  readonly peerDependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-}
 
 export interface WorkspaceGraphPackage {
   readonly name: string;
@@ -41,33 +32,22 @@ export const TestWorkspaceOptionsSchema = z.object({
 const PROJEN_INTEGRATION_TEST =
   /(?:local-publish|npm-release|packed-consumer|project-py|publish|python-sync|release|root-install|sdk-boundary).*\.test\.ts$/;
 
-function readJson<T>(path: string): T {
-  return JSON.parse(readFileSync(path, "utf8")) as T;
-}
-
 export function workspaceGraph(root: string): WorkspaceGraph {
-  const workspace = readJson<PackageManifest>(join(root, "package.json"));
-  const packages = new Map<string, { path: string; manifest: PackageManifest }>();
-  for (const member of workspace.workspaces ?? []) {
-    const manifest = readJson<PackageManifest>(join(root, member, "package.json"));
-    if (manifest.name) packages.set(manifest.name, { path: toPosix(member), manifest });
+  const packages = new Map<string, { path: string; manifest: Readonly<Record<string, unknown>> }>();
+  for (const pkg of recordedPackages(root)) {
+    if (pkg.name && pkg.manifest) {
+      packages.set(pkg.name, { path: pkg.path, manifest: pkg.manifest });
+    }
   }
   const reverse = new Map<string, Set<string>>();
   const rows = [...packages].map(([name, pkg]) => {
     const dependencies = new Set<string>();
-    for (const field of [
-      "dependencies",
-      "optionalDependencies",
-      "peerDependencies",
-      "devDependencies",
-    ] as const) {
-      for (const dependency of Object.keys(pkg.manifest[field] ?? {})) {
-        if (!packages.has(dependency)) continue;
-        dependencies.add(dependency);
-        const dependents = reverse.get(dependency) ?? new Set<string>();
-        dependents.add(name);
-        reverse.set(dependency, dependents);
-      }
+    for (const dependency of workspaceDependencyNames(pkg.manifest, { includeDev: true })) {
+      if (!packages.has(dependency)) continue;
+      dependencies.add(dependency);
+      const dependents = reverse.get(dependency) ?? new Set<string>();
+      dependents.add(name);
+      reverse.set(dependency, dependents);
     }
     return { name, path: pkg.path, dependencies: [...dependencies].sort() };
   });

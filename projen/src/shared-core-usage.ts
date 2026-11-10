@@ -11,7 +11,7 @@ import { findFiles } from "@dbx-tools/path";
 import * as core from "@dbx-tools/shared-core";
 import { PACKAGE_IDENTIFIER, sequence } from "@dbx-tools/shared-core";
 import { PYTHON_GENERATED_PACKAGE } from "./generated.ts";
-import { readPackageManifest, recordedPackages, repoRoot } from "./packages.ts";
+import { recordedPackages, repoRoot } from "./packages.ts";
 
 /** How one runtime export is referenced in this repository. */
 export type SharedCoreUsageKind = "production" | "test" | "internal" | "binding" | "unused";
@@ -48,7 +48,7 @@ const OWNED_HELPER_FILES = new Set([
 
 function sharedCorePackageDir(root: string = repoRoot): string {
   for (const pkg of recordedPackages(root)) {
-    if (readPackageManifest(pkg.dir)?.name === PACKAGE_IDENTIFIER) return pkg.dir;
+    if (pkg.name === PACKAGE_IDENTIFIER) return pkg.dir;
   }
   throw new Error(`workspace package ${PACKAGE_IDENTIFIER} is missing`);
 }

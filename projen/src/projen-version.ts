@@ -6,4 +6,4 @@
  * development dependency on this single value; duplicate Projen instances can
  * break its remaining `instanceof`-based file detection.
  */
-export const PROJEN_VERSION = "^0.103.27";
+export const PROJEN_VERSION = "^0.104.26";

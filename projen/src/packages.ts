@@ -242,6 +242,10 @@ export interface RecordedPackage {
   readonly relPath: string;
   /** Absolute package directory. */
   readonly dir: string;
+  /** Package name from `package.json`, when the manifest is readable and names the package. */
+  readonly name?: string;
+  /** Parsed `package.json`, when present and readable. */
+  readonly manifest?: Readonly<Record<string, unknown>>;
   /** Resolved tags from `package.json` `dbxToolsConfig.tags`, else the path candidates. */
   readonly tags: string[];
 }
@@ -264,15 +268,23 @@ export function readPackageManifest(dir: string): Record<string, unknown> | unde
 
 /** A package's validated `dbxToolsConfig` object, or `undefined` when absent. */
 export function readDbxToolsConfig(dir: string): DBXToolsConfigData | undefined {
-  const config = readPackageManifest(dir)?.dbxToolsConfig;
+  return dbxToolsConfig(readPackageManifest(dir));
+}
+
+function dbxToolsConfig(
+  manifest: Readonly<Record<string, unknown>> | undefined,
+): DBXToolsConfigData | undefined {
+  const config = manifest?.dbxToolsConfig;
   if (config === undefined) return undefined;
   const parsed = DBXToolsConfigDataSchema.safeParse(config);
   return parsed.success ? parsed.data : undefined;
 }
 
 /** Read `<dir>/package.json`'s `dbxToolsConfig.tags` (`undefined` if absent). */
-function readManifestTags(dir: string): string[] | undefined {
-  const tags = readDbxToolsConfig(dir)?.tags;
+function readManifestTags(
+  manifest: Readonly<Record<string, unknown>> | undefined,
+): string[] | undefined {
+  const tags = dbxToolsConfig(manifest)?.tags;
   return tags ? [...tags] : undefined;
 }
 
@@ -304,15 +316,50 @@ export function recordedPackages(projectRoot: string = resolveRepoRoot()): Recor
   for (const member of readRecordedMembers(projectRoot)) {
     const pkg = packageOfMember(projectRoot, member);
     if (!pkg) continue;
+    const manifest = readPackageManifest(pkg.dir);
+    const name = typeof manifest?.name === "string" ? manifest.name : undefined;
     out.push({
       path: pkg.memberPath,
       root: pkg.root,
       relPath: pkg.relPath,
       dir: pkg.dir,
-      tags: readManifestTags(pkg.dir) ?? pkg.tagCandidates,
+      ...(name ? { name } : {}),
+      ...(manifest ? { manifest } : {}),
+      tags: readManifestTags(manifest) ?? pkg.tagCandidates,
     });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** Dependency fields considered when traversing workspace package relationships. */
+export interface WorkspaceDependencyOptions {
+  /** Include development dependencies in addition to runtime and peer dependencies. */
+  readonly includeDev?: boolean;
+}
+
+/**
+ * Dependency names declared by one parsed package manifest.
+ *
+ * Runtime traversal includes dependencies, optional dependencies, and peer
+ * dependencies. Test planning may opt into development dependencies.
+ */
+export function workspaceDependencyNames(
+  manifest: Readonly<Record<string, unknown>>,
+  options: WorkspaceDependencyOptions = {},
+): string[] {
+  const fields = [
+    "dependencies",
+    "optionalDependencies",
+    "peerDependencies",
+    ...(options.includeDev ? (["devDependencies"] as const) : []),
+  ] as const;
+  const names = new Set<string>();
+  for (const field of fields) {
+    const dependencies = manifest[field];
+    if (!isRecord(dependencies)) continue;
+    for (const dependency of Object.keys(dependencies)) names.add(dependency);
+  }
+  return [...names].sort();
 }
 
 /**
@@ -324,11 +371,10 @@ export function workspaceDependencyDirectories(
   packageName: string,
   projectRoot: string = resolveRepoRoot(),
 ): string[] {
-  const packages = new Map<string, { dir: string; manifest: Record<string, unknown> }>();
+  const packages = new Map<string, { dir: string; manifest: Readonly<Record<string, unknown>> }>();
   for (const pkg of recordedPackages(projectRoot)) {
-    const manifest = readPackageManifest(pkg.dir);
-    if (!manifest || typeof manifest.name !== "string") continue;
-    packages.set(manifest.name, { dir: pkg.dir, manifest });
+    if (!pkg.name || !pkg.manifest) continue;
+    packages.set(pkg.name, { dir: pkg.dir, manifest: pkg.manifest });
   }
   if (!packages.has(packageName)) return [];
 
@@ -337,11 +383,7 @@ export function workspaceDependencyDirectories(
     const pkg = packages.get(name);
     if (!pkg || directories.has(pkg.dir)) return;
     directories.add(pkg.dir);
-    for (const field of ["dependencies", "optionalDependencies", "peerDependencies"] as const) {
-      const dependencies = pkg.manifest[field];
-      if (!isRecord(dependencies)) continue;
-      for (const dependency of Object.keys(dependencies)) visit(dependency);
-    }
+    for (const dependency of workspaceDependencyNames(pkg.manifest)) visit(dependency);
   };
   visit(packageName);
   return [...directories].sort();

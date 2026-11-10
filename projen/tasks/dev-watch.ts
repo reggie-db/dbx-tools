@@ -10,7 +10,6 @@ import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand, taskPositionals } from "./cli.ts";
 import { DEV_RESTART_DEBOUNCE_MS, DEV_RESTART_KEY, DEV_WATCH_TASK } from "../src/dev-watch.ts";
 import {
-  readPackageManifest,
   recordedPackages,
   resolveRepoRoot,
   workspaceDependencyDirectories,
@@ -126,10 +125,7 @@ export function serializedWatchGlobArgs(options: DevWatchForwardOptions): string
 
 function workspacePackages(root: string): WorkspacePackage[] {
   return recordedPackages(root)
-    .map(({ dir }) => {
-      const name = readPackageManifest(dir)?.name;
-      return { dir, name: typeof name === "string" ? name : undefined };
-    })
+    .map(({ dir, name }) => ({ dir, name }))
     .sort((left, right) => right.dir.length - left.dir.length);
 }
 

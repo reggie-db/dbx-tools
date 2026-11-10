@@ -2,19 +2,14 @@
 /** Batch package type-checks and run package-owned compile lifecycles. */
 import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { type ExecResult, spawn } from "@dbx-tools/core";
-import { log, toError } from "@dbx-tools/shared-core";
+import { isRecord, log, toError } from "@dbx-tools/shared-core";
 import type { TaskSpec, TasksManifest } from "projen";
 import { runTaskMain } from "./cli.ts";
+import { recordedPackages } from "../src/packages.ts";
 
 const logger = log.logger("projen:compile");
-
-interface PackageManifest {
-  readonly name?: string;
-  readonly scripts?: Record<string, string>;
-  readonly workspaces?: string[];
-}
 
 export interface CompilePlan {
   readonly typescriptConfigs: string[];
@@ -47,18 +42,16 @@ function hasLifecycle(task: TaskSpec | undefined): boolean {
   return hasTaskOptions(task) || (task?.steps?.length ?? 0) > 0;
 }
 
-/** Read the root's concrete workspace paths on every run, including newly added members. */
+/** Plan compilation from the recorded Projen workspace members. */
 export function compilePlan(root: string): CompilePlan {
-  const workspace = readJson<PackageManifest>(join(root, "package.json"));
   const rootConfig = join(root, "tsconfig.json");
   const typescriptConfigs: string[] = existsSync(rootConfig) ? [rootConfig] : [];
   const customPackages: CompilePlan["customPackages"] = [];
-  for (const member of workspace.workspaces ?? []) {
-    const directory = resolve(root, member);
-    const manifest = readJson<PackageManifest>(join(directory, "package.json"));
-    const script = manifest.scripts?.compile;
+  for (const pkg of recordedPackages(root)) {
+    const scripts = isRecord(pkg.manifest?.scripts) ? pkg.manifest.scripts : undefined;
+    const script = typeof scripts?.compile === "string" ? scripts.compile : undefined;
     if (!script) continue;
-    const taskPath = join(directory, ".projen", "tasks.json");
+    const taskPath = join(pkg.dir, ".projen", "tasks.json");
     const tasks = existsSync(taskPath) ? readJson<TasksManifest>(taskPath).tasks : undefined;
     const plainCompile = plainTypeScriptBuild(tasks?.compile);
     if (
@@ -67,9 +60,9 @@ export function compilePlan(root: string): CompilePlan {
       !hasLifecycle(tasks?.["pre-compile"]) &&
       !hasLifecycle(tasks?.["post-compile"])
     ) {
-      typescriptConfigs.push(join(directory, "tsconfig.json"));
+      typescriptConfigs.push(join(pkg.dir, "tsconfig.json"));
     } else {
-      customPackages.push({ name: manifest.name ?? member, directory });
+      customPackages.push({ name: pkg.name ?? pkg.path, directory: pkg.dir });
     }
   }
   return { typescriptConfigs, customPackages };

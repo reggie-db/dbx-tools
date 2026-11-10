@@ -7,17 +7,17 @@
     },
     {
       "name": "@types/semver",
-      "version": "^7.7.1",
+      "version": "catalog:",
       "type": "build"
     },
     {
       "name": "projen",
-      "version": "^0.103.27",
+      "version": "^0.104.26",
       "type": "build"
     },
     {
       "name": "projen",
-      "version": "^0.103.27",
+      "version": "^0.104.26",
       "type": "peer"
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "name": "concurrently",
-      "version": "^10.0.3",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -82,12 +82,12 @@
     },
     {
       "name": "semver",
-      "version": "^7.7.3",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "smol-toml",
-      "version": "1.8.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -102,7 +102,7 @@
     },
     {
       "name": "yaml",
-      "version": "^2.9.0",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

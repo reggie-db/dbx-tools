@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { Component, JsonFile, type Task, TextFile, javascript, typescript } from "projen";
+import { Component, type Task, TextFile, javascript, typescript } from "projen";
 import { BunBuildFile, BunfigFile } from "./bun-app.ts";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { headerLines } from "./generated.ts";
@@ -190,64 +190,57 @@ function configureApplication(
 }
 
 function configureTypeScript(project: javascript.NodeProject): void {
-  new JsonFile(project, "tsconfig.shared.json", {
-    marker: true,
-    readonly: true,
-    obj: {
-      compilerOptions: {
-        strict: true,
-        noUnusedLocals: true,
-        noUnusedParameters: true,
-        noFallthroughCasesInSwitch: true,
-        noImplicitReturns: true,
-        module: "ESNext",
-        moduleResolution: "bundler",
-        resolveJsonModule: true,
-        esModuleInterop: true,
-        jsx: "react-jsx",
-        skipLibCheck: true,
-        forceConsistentCasingInFileNames: true,
-      },
+  const shared = new javascript.TypescriptConfig(project, {
+    fileName: "tsconfig.shared.json",
+    compilerOptions: {
+      strict: true,
+      noUnusedLocals: true,
+      noUnusedParameters: true,
+      noFallthroughCasesInSwitch: true,
+      noImplicitReturns: true,
+      module: "ESNext",
+      moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
+      resolveJsonModule: true,
+      esModuleInterop: true,
+      jsx: javascript.TypeScriptJsxMode.REACT_JSX,
+      skipLibCheck: true,
+      forceConsistentCasingInFileNames: true,
     },
   });
-  new JsonFile(project, "tsconfig.client.json", {
-    marker: true,
-    readonly: true,
-    obj: {
-      extends: "./tsconfig.shared.json",
-      compilerOptions: {
-        target: "ES2022",
-        useDefineForClassFields: true,
-        lib: ["ES2022", "DOM", "DOM.Iterable"],
-        types: ["vite/client", "node"],
-        allowImportingTsExtensions: true,
-        verbatimModuleSyntax: true,
-        moduleDetection: "force",
-        noEmit: true,
-        jsx: "react-jsx",
-        noUncheckedSideEffectImports: true,
-        baseUrl: "./client",
-        paths: { "@/*": ["./src/*"] },
-      },
-      include: ["client/src", "client/vite.config.override.ts", "shared/appkit-types"],
+  const client = new javascript.TypescriptConfig(project, {
+    fileName: "tsconfig.client.json",
+    extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([shared]),
+    compilerOptions: {
+      target: "ES2022",
+      lib: ["ES2022", "DOM", "DOM.Iterable"],
+      types: ["vite/client", "node"],
+      allowImportingTsExtensions: true,
+      verbatimModuleSyntax: true,
+      moduleDetection: javascript.TypeScriptModuleDetection.FORCE,
+      noEmit: true,
+      jsx: javascript.TypeScriptJsxMode.REACT_JSX,
+      baseUrl: "./client",
+      paths: { "@/*": ["./src/*"] },
     },
+    include: ["client/src", "client/vite.config.override.ts", "shared/appkit-types"],
+    exclude: ["node_modules"],
   });
-  new JsonFile(project, "tsconfig.server.json", {
-    marker: true,
-    readonly: true,
-    obj: {
-      extends: "./tsconfig.shared.json",
-      compilerOptions: {
-        target: "ES2022",
-        lib: ["ES2022"],
-        types: ["node"],
-        allowImportingTsExtensions: true,
-        noEmit: true,
-        rootDir: ".",
-      },
-      include: ["server/**/*.ts", "shared/**/*.ts"],
-      exclude: ["node_modules", "client"],
+  // Projen 0.104.26 does not expose these TypeScript compiler options yet.
+  client.file.addOverride("compilerOptions.useDefineForClassFields", true);
+  client.file.addOverride("compilerOptions.noUncheckedSideEffectImports", true);
+  new javascript.TypescriptConfig(project, {
+    fileName: "tsconfig.server.json",
+    extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([shared]),
+    compilerOptions: {
+      target: "ES2022",
+      lib: ["ES2022"],
+      types: ["node"],
+      allowImportingTsExtensions: true,
+      noEmit: true,
+      rootDir: ".",
     },
+    include: ["server/**/*.ts", "shared/**/*.ts"],
+    exclude: ["node_modules", "client"],
   });
 
   if (!(project instanceof typescript.TypeScriptProject) || !project.tsconfig) return;
