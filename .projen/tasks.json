@@ -811,10 +811,13 @@
     },
     "sync": {
       "name": "sync",
-      "description": "Synthesize project files once or continuously with --watch",
+      "description": "Synthesize once or keep generated sources current with --watch",
       "steps": [
         {
-          "exec": "bunx projen",
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/sync.ts"
+          ],
           "receiveArgs": true
         }
       ]
@@ -1124,6 +1127,7 @@
             "projen/test/python-registry.test.ts",
             "projen/test/shared-boundary.test.ts",
             "projen/test/shared-core-usage.test.ts",
+            "projen/test/sync.test.ts",
             "projen/test/task-cli.test.ts",
             "projen/test/task-command.test.ts",
             "projen/test/tasks.test.ts",

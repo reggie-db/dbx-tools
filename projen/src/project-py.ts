@@ -458,9 +458,13 @@ export class DBXToolsPythonWorkspace extends Component {
         }),
     );
     if (configuredNodeRuntime) {
+      const projectDirectory = pythonPackagePath(this.repository, configuredNodeRuntime.directory);
       new PythonNodeRuntime(project, {
-        projectDirectory: pythonPackagePath(this.repository, configuredNodeRuntime.directory),
+        projectDirectory,
       });
+      if (isDBXToolsJavaScriptProject()(project)) {
+        project.dbxToolsConfig.pythonNodeRuntimeDirectory = projectDirectory;
+      }
     }
     if (this.packages.some((pkg) => pythonNodeBindings(pkg.packageOptions).length > 0)) {
       new PythonNodeBindings(project);

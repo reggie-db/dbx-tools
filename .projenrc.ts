@@ -220,6 +220,9 @@ const root = new projectJs.DBXToolsNodeProject({
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
+  // Changes to generator ownership and shared branding need a full synthesis.
+  // Ordinary package source edits are handled by the focused sync watcher.
+  syncResynthPaths: ["branding/brand.yaml", "branding/assets", "projen/src"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
   // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
   // by source path either way.

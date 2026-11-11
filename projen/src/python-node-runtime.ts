@@ -47,7 +47,7 @@ export class PythonNodeRuntime extends Component {
     project.testTask.spawn(this.checkTask);
   }
 
-  /** Keep the runtime current during one-shot synthesis and native Projen watch. */
+  /** Keep the runtime current during full synthesis. */
   public override postSynthesize(): void {
     const [command, ...args] = this.buildCommand;
     runTaskCommand(this.project.outdir, command, args);

@@ -119,8 +119,13 @@ describe("workspace validation tasks", () => {
     assert.equal(fixCommand, "bun run eslint -- --fix");
   });
 
-  it("forwards sync flags to native Projen synthesis", () => {
-    assert.deepEqual(tasks.root.tasks.sync.steps, [{ exec: "bunx projen", receiveArgs: true }]);
+  it("forwards sync flags to the focused sync task", () => {
+    assert.deepEqual(tasks.root.tasks.sync.steps, [
+      {
+        execArgs: ["bun", "node_modules/@dbx-tools/projen/tasks/sync.ts"],
+        receiveArgs: true,
+      },
+    ]);
   });
 
   // The root test delegates to test:all exactly once and must not re-enter itself.

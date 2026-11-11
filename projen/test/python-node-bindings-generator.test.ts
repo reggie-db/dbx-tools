@@ -62,7 +62,7 @@ describe("Python Node task components", () => {
     ]);
   });
 
-  it("builds the shared runtime during synthesis for native watch", () => {
+  it("builds the shared runtime during full synthesis", () => {
     const directory = temporaryDirectory();
     const runtimeDirectory = join(directory, "packages/py/node-runtime");
     mkdirSync(runtimeDirectory, { recursive: true });

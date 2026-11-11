@@ -24,7 +24,7 @@ function project(outdir: string): DBXToolsNodeProject {
 }
 
 describe("VS Code settings", () => {
-  it("starts native Projen watch when the folder opens", () => {
+  it("starts focused sync watch when the folder opens", () => {
     const outdir = mkdtempSync(join(tmpdir(), "dbx-tools-vscode-"));
     temporaryDirectories.push(outdir);
     project(outdir).synth();
@@ -41,7 +41,7 @@ describe("VS Code settings", () => {
       tasks.tasks.find(({ label }) => label === "sync"),
       {
         label: "sync",
-        detail: "projen --watch - automatically resynthesize generated files and barrels",
+        detail: "focused sync watch - update generated sources and resynthesize when required",
         type: "shell",
         command: "bun run sync -- --watch",
         isBackground: true,

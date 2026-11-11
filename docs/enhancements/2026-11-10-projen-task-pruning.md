@@ -44,12 +44,12 @@ criteria.
 
 ## Barrel warning disposition
 
-The repeated barrel warning was harmless. It came from the custom continuous
-barrel watcher classifying Python or other unrelated paths. That watcher has
-been removed. `bun run barrels` remains as explicit one-shot generation, and
-native Projen watch reruns normal synthesis, including barrel generation after
-package discovery. The unowned-path warning therefore has no remaining runtime
-path.
+The repeated barrel warning was harmless. It came from the old barrel watcher
+classifying Python or other unrelated paths without reporting those paths. The
+replacement sync dispatcher classifies one debounced batch before running any
+generator. Unrelated Python paths are ignored, existing package source paths
+identify their owning barrel, and newly added or removed packages trigger full
+synthesis. The unowned-path warning has no remaining runtime path.
 
 ## Installed owner findings
 
@@ -57,9 +57,9 @@ path.
   synthesis, release triggers, npm and PyPI publishers, trusted publishing, and
   npm publication-availability waiting.
 - Projen's native `--watch` recursively watches the repository and reruns full
-  synthesis. It has no relevant-path filtering or generated-output exclusion,
-  but it provides the requested automatic whole-tree synchronization without a
-  parallel watcher owner.
+  synthesis. It has no relevant-path filtering or generated-output exclusion.
+  Projen 0.104.26 therefore cannot preserve focused barrel and binding updates;
+  the unsupported filtering and dispatch remainder stays in `@dbx-tools/projen`.
 - Projen's `clobber` hard-resets to the remote branch and runs `git clean -fdx`.
   It is materially more destructive than the interactive `clean` task.
 - AppKit's generated development task runs `bun --watch server/server.ts`.
@@ -129,12 +129,12 @@ option model is needed.
 
 ### Retained task inventory
 
-`projen/tasks` now contains 25 files and 3,811 lines. The remaining large files
+`projen/tasks` now contains 26 files and 4,171 lines. The remaining large files
 are runtime transactions rather than duplicated synthesis owners.
 
 | Files                                                                                                                   | Retained purpose                                                                                                                          |
 | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli.ts`                                                                                                                | Shared task entrypoint and parsing adapter over `@dbx-tools/cli-args`.                                                                    |
+| `cli.ts`, `sync.ts`                                                                                                     | Shared task entrypoint/parsing adapter and the single focused continuous-generation dispatcher.                                           |
 | `barrels.ts`, `bun-lockfile.ts`, `clean.ts`, `shared-core-usage.ts`, `test-workspace.ts`, `python-node-bindings.ts`     | Thin CLIs over source-owned generation, normalization, cleanup, diagnostics, dynamic test selection, and PythonMonkey generation.         |
 | `bump.ts`, `version-check.ts`                                                                                           | Canonical `VERSION` mutation and cross-language manifest verification.                                                                    |
 | `dev-watch.ts`                                                                                                          | Workspace-aware development process restart, include/exclude filtering, HMR-preserving one-shot mode, and process-tree shutdown.          |
@@ -160,22 +160,26 @@ workflow. Each item can land independently.
 
 ### Continuous generation
 
-Status: complete.
+Status: complete after correcting the native-watch performance regression.
 
 Final state:
 
-- keep `bun run sync` as a pass-through to native Projen synthesis;
-- forward `bun run sync -- --watch` to native Projen watch and start it from VS
-  Code on folder open;
-- keep `bun run barrels` as a one-shot task;
-- remove the custom sync supervisor, `projenrc.ts`, barrel watch mode, and
-  dedicated Python binding/runtime watch tasks after normal build and test
-  phases prove freshness;
-- delete `src/watch.ts`, `src/workspace-lock.ts`, watcher configuration fields,
-  and `concurrently` only when no other caller remains.
+- `bun run sync` performs one complete synthesis;
+- `bun run sync -- --watch` performs one initial synthesis, then uses one
+  debounced and serialized dispatcher process;
+- ordinary source edits regenerate affected barrels and refresh only stale
+  Python Node bindings without evaluating `.projenrc.ts`;
+- shared Python Node runtime inputs run the package-owned runtime builder
+  directly;
+- `.projenrc.ts`, configured synthesis inputs, and package additions or removals
+  trigger full synthesis;
+- VS Code starts the same task on folder open;
+- `bun run barrels` remains available as an explicit one-shot task;
+- the old multi-process supervisor, dedicated watcher tasks, `concurrently`,
+  `src/watch.ts`, and `src/workspace-lock.ts` remain deleted.
 
-This retains automatic whole-tree synchronization through Projen and eliminates
-the source of unrelated barrel watcher warnings.
+The single dispatcher retains automatic synchronization without the repeated
+full synthesis cost of native Projen watch.
 
 Acceptance checks:
 
@@ -188,16 +192,18 @@ Acceptance checks:
 
 Implemented disposition:
 
-- `sync` now forwards to Projen's native command, including `--watch`;
-- barrel generation remains one-shot;
-- the custom sync supervisor, Projen configuration watcher, barrel watch mode,
-  and dedicated Python binding and runtime watchers were removed;
-- VS Code starts native continuous Projen synthesis when a folder opens;
-- `src/watch.ts`, `src/workspace-lock.ts`, watcher configuration fields, and the
-  watcher-only `concurrently` dependency were removed;
-- Python binding generation remains in the generated-source synthesis phase;
-  the shared runtime builds during post-synthesis and `pre-compile`; both retain
-  freshness checks on `test`.
+- one `tasks/sync.ts` process owns initial synthesis, watch batching, action
+  selection, and shutdown;
+- `@dbx-tools/path` still owns filesystem watching, package discovery owns
+  topology comparison, and the barrel and Python Node binding modules retain
+  generation ownership;
+- generated root configuration records package roots, focused resynthesis
+  inputs, and the Python Node runtime directory for the dispatcher;
+- Python binding generation remains in the generated-source synthesis phase,
+  and the shared runtime still builds during post-synthesis and `pre-compile`;
+  both retain freshness checks on `test`;
+- native Projen watch is not used because it runs the complete default task for
+  routine source changes.
 
 ### Workspace compilation
 
@@ -316,7 +322,7 @@ release internals.
 
 | Tier   | Behavior change                    | Expected effect                                                                                                                                        |
 | ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tier 1 | None                               | Remove repeated parsing and inverted ownership. Runtime-only transactions may remain in `tasks`; the current directory is 25 files and 3,811 lines.    |
+| Tier 1 | None                               | Remove repeated parsing and inverted ownership. Runtime-only transactions may remain in `tasks`; the current directory is 26 files and 4,171 lines.    |
 | Tier 2 | No intended capability loss        | Watcher infrastructure and the compile runtime planner are removed. Static test planning moved to synthesis; dynamic selectors and `dev:watch` remain. |
 | Tier 3 | Explicitly approved per capability | Additional deletion depends on operational value decisions. Do not include these lines in the committed cleanup target.                                |
 | Tier 4 | No intended release-contract loss  | Potentially remove substantial custom release code, but only after artifact and recovery parity.                                                       |
@@ -340,8 +346,13 @@ was merely relocated or useful behavior that was removed.
 
 ### Current implementation evidence
 
-- `bun run sync` completed without changing the worktree after synthesis.
 - Two consecutive `bunx projen` runs produced the same diff hash.
+- A live `bun run sync -- --watch` session reached its ready state and classified
+  a touch of `packages/js/shared/core/src/options.ts` as one package barrel plus
+  Python Node bindings. It produced no full-synthesis output after the touch.
+- Focused tests cover ordinary source edits, binding-owned source edits, runtime
+  inputs, configured resynthesis inputs, package topology changes, unrelated
+  Python paths, generated task wiring, and VS Code folder-open execution.
 - `bun run barrels` reported that barrels were current and emitted no ownership
   warning.
 - `bun run pre-compile` regenerated or checked the Python runtime, Python Node
@@ -350,8 +361,10 @@ was merely relocated or useful behavior that was removed.
   plus explicit local lifecycles for custom JavaScript projects. Python
   subprojects were excluded from Bun lifecycle composition to prevent them from
   delegating back to the root compile task.
-- The full Projen suite passed: 260 tests across 48 files, including the packed
-  external-consumer lifecycle.
+- The Projen suite contains 268 tests across 49 files. Every test passed during
+  this change's validation runs. The final aggregate run reported 267 passes and
+  one existing changed-mode test timeout while corporate Git hooks exceeded its
+  fixed five-second budget; that same test passed earlier in 3.82 seconds.
 - Source documentation, generated-link, lockfile-registry, version, ESLint, and
   AI-SLOP Detector checks passed. ESLint retained two unrelated import-order
   warnings in `appkit-model-gateway`.
@@ -360,7 +373,7 @@ was merely relocated or useful behavior that was removed.
 
 - Installed Projen version: 0.104.26.
 - Initial task inventory: 31 files, 5,877 lines.
-- Current task inventory: 25 files, 3,811 lines.
+- Current task inventory: 26 files, 4,171 lines.
 - AI-SLOP Detector pulse: clean, no priority hotspots.
 - AI-SLOP Detector dead-code sweep: zero issues.
 - AI-SLOP Detector duplicate sweep: zero issues.

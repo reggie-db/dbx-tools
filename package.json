@@ -120,7 +120,13 @@
   "dbxToolsConfig": {
     "packageRoots": [
       "packages/js"
-    ]
+    ],
+    "syncResynthPaths": [
+      "branding/brand.yaml",
+      "branding/assets",
+      "projen/src"
+    ],
+    "pythonNodeRuntimeDirectory": "packages/py/node-runtime"
   },
   "type": "module",
   "workspaces": [

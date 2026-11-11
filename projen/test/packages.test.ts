@@ -32,13 +32,23 @@ describe("package roots", () => {
         outdir: root,
         defaultTagMixins: false,
         releaseMode: "disabled",
+        syncResynthPaths: ["branding"],
       });
       project.synth();
 
       const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
-        dbxToolsConfig?: { packageRoots?: string[] };
+        dbxToolsConfig?: { packageRoots?: string[]; syncResynthPaths?: string[] };
       };
       assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
+      assert.deepEqual(manifest.dbxToolsConfig?.syncResynthPaths, ["branding"]);
+
+      const tasks = JSON.parse(readFileSync(join(root, ".projen/tasks.json"), "utf8")) as {
+        tasks: Record<string, { steps?: Array<{ execArgs?: string[]; receiveArgs?: boolean }> }>;
+      };
+      assert.deepEqual(tasks.tasks.sync?.steps?.[0], {
+        execArgs: ["bun", "node_modules/@dbx-tools/projen/tasks/sync.ts"],
+        receiveArgs: true,
+      });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

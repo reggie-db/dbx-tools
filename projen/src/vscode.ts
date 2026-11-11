@@ -93,7 +93,7 @@ export function configureVsCode(scope: javascript.NodeProject): void {
       tasks: [
         {
           label: "sync",
-          detail: "projen --watch - automatically resynthesize generated files and barrels",
+          detail: "focused sync watch - update generated sources and resynthesize when required",
           type: "shell",
           command: "bun run sync -- --watch",
           isBackground: true,

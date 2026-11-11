@@ -228,8 +228,8 @@ runtime lifecycle:
 - `python-node-runtime:check` verifies the committed `runtime.js`.
 
 The runtime builds during Projen post-synthesis and before compilation, then its
-freshness check runs during tests. `bun run sync -- --watch` therefore keeps it
-current without a dedicated runtime watcher.
+freshness check runs during tests. The focused `bun run sync -- --watch` process
+also rebuilds it directly when `build-runtime.ts` or `shims/` changes.
 Built-in shims can make ordinary Node imports work under PythonMonkey.
 `functionOverrides` replaces named exports only in the generated runtime, so the
 Node package does not gain Python callbacks or alternate source files. A
@@ -518,7 +518,10 @@ contract as the CLI.
 - Change `.projenrc.ts` or another owning configuration source, then run
   `bun run sync` from the workspace root. VS Code starts `bun run sync -- --watch`
   when the folder opens, so an approved background task keeps generated files
-  current while the workspace is open. Don't hand-edit generated files.
+  current while the workspace is open. The watcher regenerates affected barrels,
+  Python Node bindings, and the shared Python Node runtime directly. It runs full
+  synthesis only for `.projenrc.ts`, configured generator inputs, or package
+  additions and removals. Don't hand-edit generated files.
 - Synthesis is a whole-tree operation. Don't run `bunx projen` or
   `projen default` from a member package.
 - `packageRoots` discovery creates a package for each source-bearing directory.
@@ -571,7 +574,7 @@ one synthesis. Work from the root:
 | `bun run compile`         | Batched `tsc --build` plus custom member compiles   |
 | `bun run test`            | `eslint` once, then each member's tests             |
 | `bun run sync`            | run one complete Projen synthesis                   |
-| `bun run sync -- --watch` | resynthesize automatically after workspace changes  |
+| `bun run sync -- --watch` | focused generation; synthesize when required        |
 | `bun run barrels`         | regenerate the read-only `index.ts` barrels         |
 | `bun run bump`            | increment `VERSION` and regenerate version surfaces |
 | `bun run version:check`   | verify every generated version against `VERSION`    |

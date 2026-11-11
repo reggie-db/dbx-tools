@@ -616,6 +616,12 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      */
     readonly packageRoots?: readonly string[];
     /**
+     * Extra repo-root paths that trigger full synthesis during `sync --watch`
+     * alongside `.projenrc.ts`. Ordinary package source edits use focused
+     * generators instead.
+     */
+    readonly syncResynthPaths?: readonly string[];
+    /**
      * Leading path segment(s) dropped from a discovered package's relative path
      * before its npm name is derived, so a tier folder doesn't become a name
      * prefix. E.g. with the default `"node"`, `packages/node/path` names as
@@ -1323,8 +1329,8 @@ function registerRootTasks(project: javascript.NodeProject): void {
     receiveArgs: true,
   });
   project.addTask("sync", {
-    description: "Synthesize project files once or continuously with --watch",
-    exec: project.projenCommand,
+    description: "Synthesize once or keep generated sources current with --watch",
+    execArgs: taskCommand("sync.ts"),
     receiveArgs: true,
   });
 }
@@ -1408,6 +1414,9 @@ function initProject(
       : (options.appRoot ??
         (existsSync(resolve(rootAbs, "packages/app")) ? "packages/app" : undefined));
   project.dbxToolsConfig.packageRoots = [...roots];
+  if (options.syncResynthPaths?.length) {
+    project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
+  }
 
   configureVsCode(project);
 

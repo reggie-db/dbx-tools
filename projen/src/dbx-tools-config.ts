@@ -29,6 +29,16 @@ export const DBXToolsConfigDataSchema = z
       .readonly()
       .optional()
       .describe("Repository paths scanned for JavaScript packages."),
+    syncResynthPaths: z
+      .array(z.string().min(1))
+      .readonly()
+      .optional()
+      .describe("Additional paths that trigger full synthesis during sync watch."),
+    pythonNodeRuntimeDirectory: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Repository path containing the shared Python Node runtime builder."),
     publishable: z
       .boolean()
       .optional()
@@ -49,6 +59,10 @@ export class DBXToolsConfig {
   readonly codegenInputs: string[];
   /** Repository paths scanned for JavaScript package discovery. */
   packageRoots?: string[];
+  /** Additional repository paths that trigger full synthesis during sync watch. */
+  syncResynthPaths?: string[];
+  /** Repository path containing the shared Python Node runtime builder. */
+  pythonNodeRuntimeDirectory?: string;
   /** Whether compiled npm publication machinery is enabled. */
   publishable: boolean;
 
@@ -75,6 +89,10 @@ export class DBXToolsConfig {
       ...(codegenInputs.length ? { codegenInputs } : {}),
       ...(!this.publishable ? { publishable: false } : {}),
       ...(this.packageRoots?.length ? { packageRoots: this.packageRoots } : {}),
+      ...(this.syncResynthPaths?.length ? { syncResynthPaths: this.syncResynthPaths } : {}),
+      ...(this.pythonNodeRuntimeDirectory
+        ? { pythonNodeRuntimeDirectory: this.pythonNodeRuntimeDirectory }
+        : {}),
     });
   }
 }
