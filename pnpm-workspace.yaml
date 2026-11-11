@@ -68,6 +68,7 @@ catalog:
   "@databricks/appkit": 0.81.0
   "@databricks/appkit-ui": 0.81.0
   "@databricks/sdk-experimental": ^0.17.0
+  "@dbx-tools/dbx-model-catalog": 0.1.7
   "@types/json-schema": ^7
   "@types/pg": ^8
   "@types/semver": ^7.7.1

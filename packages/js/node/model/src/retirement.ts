@@ -1,10 +1,7 @@
 /** Lightweight model retirement state shared by discovery and metadata caches. */
+import { bundledModelCatalogIndex } from "@dbx-tools/dbx-model-catalog/snapshot";
 import type { ModelStatus, ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import retiredModelsSnapshotJson from "./generated/retired-models.json" with { type: "json" };
-import { RetiredModelsSnapshotSchema } from "./metadata-contract.ts";
-
-const snapshot = RetiredModelsSnapshotSchema.parse(retiredModelsSnapshotJson);
 const RETIRED_MODEL_PREFIXES = new Set([
   "ai",
   "anthropic",
@@ -15,15 +12,23 @@ const RETIRED_MODEL_PREFIXES = new Set([
   "openai",
   "system",
 ]);
+const catalogGeneratedAt = Math.floor(
+  new Date(bundledModelCatalogIndex.catalog.updated_at).getTime() / 1_000,
+);
+const catalogRetiredModels = Object.freeze(
+  bundledModelCatalogIndex.records
+    .filter((record) => record.status === "deprecated" || record.status === "retired")
+    .map((record) => record.name),
+);
 
-let names: readonly string[] = Object.freeze([...snapshot.models]);
+let names: readonly string[] = catalogRetiredModels;
 let keys = retiredKeys(names);
 
-/** Retired model names from the committed metadata snapshot. */
-export const COMMITTED_RETIRED_MODELS = snapshot.models;
+/** Retired model names from the bundled public catalog. */
+export const COMMITTED_RETIRED_MODELS = catalogRetiredModels;
 
-/** Generation timestamp recorded in the committed retired-model snapshot. */
-export const RETIRED_MODELS_GENERATED_AT = snapshot.generatedAt;
+/** Update timestamp recorded in the bundled public catalog. */
+export const RETIRED_MODELS_GENERATED_AT = catalogGeneratedAt;
 
 /** Replace retirement state after metadata cache hydration or refresh. */
 export function replaceRetiredModelNames(models: readonly string[]): void {

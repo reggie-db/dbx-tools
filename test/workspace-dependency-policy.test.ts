@@ -21,7 +21,12 @@ interface PackageManifest {
 }
 
 /** Deliberate non-exact internal dependencies, keyed by package, field, and dependency. */
-const INTERNAL_DEPENDENCY_EXCEPTIONS = new Map<string, string>();
+const INTERNAL_DEPENDENCY_EXCEPTIONS = new Map<string, string>([
+  [
+    "@dbx-tools/model:dependencies:@dbx-tools/dbx-model-catalog",
+    "The public model catalog is released from the separate dbx-model-catalog repository.",
+  ],
+]);
 
 function readManifest(path: string): PackageManifest {
   return JSON.parse(readFileSync(path, "utf8")) as PackageManifest;

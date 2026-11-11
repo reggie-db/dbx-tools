@@ -52,16 +52,14 @@ The package:
   and re-lists once on a resolve miss so a newly deployed model still resolves.
 - Builds the invocations URL and mints per-request auth headers for callers that
   issue their own OpenAI-shaped HTTP requests.
-- Provides build-generated retirement, Responses, image-input, apply-patch,
+- Provides public-catalog retirement, Responses, image-input, apply-patch,
   web-search, reasoning, tool-calling, structured-output, temperature-support,
   latency, human-preference rating, ITPM, OTPM, QPH, and token-price metadata
-  through cached in-process lookups. Databricks documentation is enriched with
-  models.dev and modelparams.dev snapshots. Normalized latency metadata uses
-  the MIT-licensed `vicaroai/tokens-per-second` benchmark after Databricks and
-  those catalogues provide no per-model latency field. Ratings use every CC BY
-  4.0 LMArena `latest` parquet configuration published through Hugging Face.
-  Token prices come only from Databricks pricing pages, and committed fallbacks
-  keep refreshes and runtime startup offline-safe.
+  through cached in-process lookups. `@dbx-tools/dbx-model-catalog` supplies a
+  bundled offline snapshot and an explicit refresh from public documentation
+  and public datasets. The catalog does not authenticate to Databricks or
+  inspect a workspace. Live workspace discovery in this package remains the
+  source of truth for endpoint availability and runtime capabilities.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
@@ -112,7 +110,7 @@ const response = await fetch(route.url, {
 It lists and normalizes endpoints, caches one
 catalogue per host, workspace ID, and principal, refreshes once after an
 unmatched fuzzy request, resolves routes, returns complete authentication
-headers, exposes profiles, and returns the package's generated metadata. Its
+headers, exposes profiles, and returns the package's public catalog metadata. Its
 portable `@dbx-tools/model/python` entrypoint excludes the AppKit catalogue
 wrapper while reusing the same pure ranking and policy implementation.
 
@@ -303,14 +301,20 @@ rating?.score;
 rating?.rankings.text_style_control?.lowerBound;
 ```
 
-The package ships committed snapshots generated from Databricks documentation
-and public model catalogues by `bun run --filter '@dbx-tools/model' metadata`.
-Runtime calls normalize endpoint, display, foundation-model, and provider
-identities into memoized sets and maps. They do not fetch documentation or
-benchmarks. `modelMetadataFor()` returns status, capabilities, normalized
-latency metadata, Arena ratings, published limits, and Databricks DBU rates per
-million input, output, cache-read, and cache-write tokens together for a string
-or `ServingEndpointSummary`.
+The package loads the bundled `@dbx-tools/dbx-model-catalog` snapshot
+synchronously. `refreshModelMetadata()` downloads the current catalog and search
+index from their public publication URLs. Neither path uses Databricks
+credentials, workspace APIs, customer data, Python, Pyfig, or Pynect. Runtime
+calls normalize endpoint, display, foundation-model, and provider identities
+into memoized sets and maps. `modelMetadataFor()` returns status, capabilities,
+normalized latency metadata, Arena ratings, published limits, and Databricks DBU
+rates per million input, output, cache-read, and cache-write tokens together for
+a string or `ServingEndpointSummary`.
+
+The existing metadata contracts, parser exports, and generation task remain
+available for compatibility. Runtime metadata uses the catalog first. The
+committed models.dev capability snapshot fills fields that are absent from a
+historical catalog record, without overriding an explicit catalog value.
 
 `latencyScore.score` is the benchmark's median
 normalized response time in milliseconds, so lower values are faster.
@@ -362,8 +366,8 @@ policy decisions. Use fallbacks only when live resolution is unavailable.
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
-- `metadata` - build-generated retirement, capability, latency, rating,
-  rate-limit, and token-price snapshots with cached normalized lookups.
+- `metadata` - public catalog metadata, locally learned reasoning ladders, and
+  cached normalized lookups.
 - `modelClient` - portable authentication-aware discovery, selection, routing,
   profile, and metadata facade.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.

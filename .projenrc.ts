@@ -97,6 +97,7 @@ const root = new projectJs.DBXToolsNodeProject({
   // Shared dependency versions are known at construction and belong to the
   // native workspace catalog.
   catalog: {
+    "@dbx-tools/dbx-model-catalog": "0.1.7",
     "@types/json-schema": "^7",
     "@types/pg": "^8",
     "@types/semver": "^7.7.1",
@@ -549,6 +550,7 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
   p.package.addField("description", "Workspace-aware Databricks Model Serving selection");
   projectJs.applyIncludes(p, "scripts/**/*.ts");
   p.addDeps(
+    "@dbx-tools/dbx-model-catalog@catalog:",
     "@dbx-tools/cache@workspace:*",
     "@dbx-tools/auth@workspace:*",
     "@dbx-tools/shared-auth@workspace:*",

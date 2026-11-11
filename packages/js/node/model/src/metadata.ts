@@ -1,17 +1,19 @@
 /**
- * Build-generated Databricks and public model capability metadata, plus a
- * daily write-through cache for refreshed sources and error-learned reasoning
- * ladders.
+ * Public model metadata adapted from @dbx-tools/dbx-model-catalog, plus a
+ * write-through cache for error-learned reasoning ladders.
  *
- * Committed snapshots seed every process. {@link refreshModelMetadata} pulls
- * Databricks documentation, models.dev, and modelparams.dev through the shared
- * memory-first {@link createMetadataCache} and rebuilds the in-memory index.
- * Error-learned efforts use the same store via {@link rememberReasoningLevels}.
- * Known-good values are written behind to the shared model project cache.
+ * The bundled public catalog seeds every process. {@link refreshModelMetadata}
+ * downloads the current public catalog publication. Workspace endpoint
+ * discovery and error-learned efforts remain owned by this package.
  *
  * @module
  */
 import { memoize } from "@dbx-tools/shared-core";
+import { loadModelCatalog } from "@dbx-tools/dbx-model-catalog/browser";
+import {
+  bundledModelCatalogIndex,
+  createModelCatalogIndex,
+} from "@dbx-tools/dbx-model-catalog/snapshot";
 import type {
   ModelCapabilities,
   ModelLatencyScore,
@@ -22,57 +24,11 @@ import type {
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import {
-  databricksGenAiCalculatorAssetUrl,
-  parseArenaModelRatings,
-  parseModelParams,
-  parseModelCapabilities,
-  parseModelLatencyBenchmark,
-  parseModelRateLimits,
-  parseModelTokenPrices,
-  parseModelsDev,
-  parseReasoningModels,
-  parseRetiredModels,
-} from "./_metadata-generator.ts";
+import { metadataFromCatalog, type CatalogMetadataInput } from "./_catalog-metadata.ts";
 import { compareVersionTuples, versionTuple } from "./classify.ts";
-import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
-import latencySnapshotJson from "./generated/model-latency.json" with { type: "json" };
-import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
-import ratingsSnapshotJson from "./generated/model-ratings.json" with { type: "json" };
-import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
-import tokenPricesSnapshotJson from "./generated/model-token-prices.json" with { type: "json" };
-import modelParamsSnapshotJson from "./generated/modelparams-reasoning.json" with { type: "json" };
 import modelsDevSnapshotJson from "./generated/models-dev-capabilities.json" with { type: "json" };
-import {
-  createMetadataCache,
-  mergePreferFreshList,
-  mergePreferFreshRecord,
-  type MetadataCache,
-} from "./metadata-cache.ts";
-import {
-  MODELPARAMS_DEV_MODELS_URL,
-  MODELS_DEV_API_URL,
-  MODEL_LATENCY_BENCHMARK_URL,
-  GENAI_PRICING_CALCULATOR_URL,
-  MODEL_RATE_LIMITS_URL,
-  FOUNDATION_MODEL_PRICING_URL,
-  OPENAI_RESPONSES_MODELS_URL,
-  PROPRIETARY_MODEL_PRICING_URL,
-  QUERY_REASON_MODELS_URL,
-  RETIRED_MODELS_URL,
-  WEB_SEARCH_MODELS_URL,
-  type ModelParamsCatalogue,
-  ModelParamsSnapshotSchema,
-  ModelCapabilitiesSnapshotSchema,
-  type ModelCapabilityCatalogue,
-  ModelLatencyScoreSnapshotSchema,
-  ModelRatingsSnapshotSchema,
-  ModelRateLimitsSnapshotSchema,
-  ModelTokenPricesSnapshotSchema,
-  type ModelsDevCapabilityCatalogue,
-  ModelsDevSnapshotSchema,
-  ReasoningModelsSnapshotSchema,
-} from "./metadata-contract.ts";
+import { createMetadataCache, mergePreferFreshRecord } from "./metadata-cache.ts";
+import { ModelsDevSnapshotSchema } from "./metadata-contract.ts";
 import {
   inheritsNativeWebSearch,
   isFoundationModelIdentity,
@@ -90,21 +46,7 @@ import {
   type ReasoningModelCatalogue,
   uniqueReasoningLevels,
 } from "./reasoning-translation.ts";
-import {
-  COMMITTED_RETIRED_MODELS,
-  modelStatusFor,
-  replaceRetiredModelNames,
-  RETIRED_MODELS_GENERATED_AT,
-} from "./retirement.ts";
-
-const capabilitiesSnapshot = ModelCapabilitiesSnapshotSchema.parse(capabilitiesSnapshotJson);
-const latencySnapshot = ModelLatencyScoreSnapshotSchema.parse(latencySnapshotJson);
-const ratingsSnapshot = ModelRatingsSnapshotSchema.parse(ratingsSnapshotJson);
-const modelParamsSnapshot = ModelParamsSnapshotSchema.parse(modelParamsSnapshotJson);
-const modelsDevSnapshot = ModelsDevSnapshotSchema.parse(modelsDevSnapshotJson);
-const rateLimitsSnapshot = ModelRateLimitsSnapshotSchema.parse(rateLimitsSnapshotJson);
-const tokenPricesSnapshot = ModelTokenPricesSnapshotSchema.parse(tokenPricesSnapshotJson);
-const reasoningSnapshot = ReasoningModelsSnapshotSchema.parse(reasoningSnapshotJson);
+import { modelStatusFor, replaceRetiredModelNames } from "./retirement.ts";
 
 interface MetadataIndex {
   readonly capabilities: {
@@ -121,8 +63,18 @@ interface MetadataIndex {
   readonly temperatureUnsupported: ReadonlySet<string>;
 }
 
-type CapabilitySets = ModelCapabilityCatalogue;
-type ModelsDevData = ModelsDevCapabilityCatalogue;
+type CapabilitySets = CatalogMetadataInput["capabilities"];
+type ModelsDevData = CatalogMetadataInput["modelsDev"];
+type CatalogSnapshot = Readonly<{
+  catalog: Parameters<typeof createModelCatalogIndex>[0];
+  searchIndex: Parameters<typeof createModelCatalogIndex>[1];
+}>;
+
+const compatibilityModelsDev = ModelsDevSnapshotSchema.parse(modelsDevSnapshotJson).capabilities;
+
+function catalogMetadata(index: Parameters<typeof metadataFromCatalog>[0]): CatalogMetadataInput {
+  return metadataFromCatalog(index, { modelsDev: compatibilityModelsDev });
+}
 
 /** Token counts used to estimate one Databricks model invocation. */
 export interface ModelTokenUsage {
@@ -150,133 +102,22 @@ export interface ModelTokenPriceEstimate {
   }>;
 }
 
-const USER_AGENT = "dbx-tools-model-metadata/1";
-
-const retiredCache = createMetadataCache<readonly string[]>({
-  key: "retired-models",
-  fallback: COMMITTED_RETIRED_MODELS,
-  load: async () => parseRetiredModels(await loadPage(RETIRED_MODELS_URL), nowSeconds()).models,
-  merge: mergePreferFreshList,
-});
-
-const capabilitiesCache = createMetadataCache<CapabilitySets>({
-  key: "model-capabilities",
-  fallback: capabilitiesSnapshot.capabilities,
-  load: async () => {
-    const [responsesHtml, webSearchHtml] = await Promise.all([
-      loadPage(OPENAI_RESPONSES_MODELS_URL),
-      loadPage(WEB_SEARCH_MODELS_URL),
-    ]);
-    return parseModelCapabilities(responsesHtml, webSearchHtml, nowSeconds()).capabilities;
+const catalogCache = createMetadataCache<CatalogSnapshot>({
+  key: "public-model-catalog-v16",
+  fallback: {
+    catalog: bundledModelCatalogIndex.catalog,
+    searchIndex: bundledModelCatalogIndex.searchIndex,
   },
-  merge: (input) => ({
-    responses: mergePreferFreshList({
-      fresh: input.fresh?.responses,
-      previous: input.previous?.responses,
-      fallback: input.fallback.responses,
-    }),
-    imageInput: mergePreferFreshList({
-      fresh: input.fresh?.imageInput,
-      previous: input.previous?.imageInput,
-      fallback: input.fallback.imageInput,
-    }),
-    applyPatch: mergePreferFreshList({
-      fresh: input.fresh?.applyPatch,
-      previous: input.previous?.applyPatch,
-      fallback: input.fallback.applyPatch,
-    }),
-    webSearch: mergePreferFreshList({
-      fresh: input.fresh?.webSearch,
-      previous: input.previous?.webSearch,
-      fallback: input.fallback.webSearch,
-    }),
-  }),
-});
-
-const rateLimitsCache = createMetadataCache<Readonly<Record<string, ModelRateLimits>>>({
-  key: "model-rate-limits",
-  fallback: rateLimitsSnapshot.catalogue.models,
-  load: async () =>
-    parseModelRateLimits(await loadPage(MODEL_RATE_LIMITS_URL), nowSeconds()).catalogue.models,
-  merge: mergePreferFreshRecord,
-});
-
-const tokenPricesCache = createMetadataCache<Readonly<Record<string, readonly ModelTokenPrice[]>>>({
-  key: "model-token-prices",
-  fallback: tokenPricesSnapshot.catalogue.models,
   load: async () => {
-    const [foundationHtml, proprietaryHtml, calculatorHtml] = await Promise.all([
-      loadPage(FOUNDATION_MODEL_PRICING_URL),
-      loadPage(PROPRIETARY_MODEL_PRICING_URL),
-      loadPage(GENAI_PRICING_CALCULATOR_URL),
-    ]);
-    const calculatorJavascript = await loadPage(
-      databricksGenAiCalculatorAssetUrl(calculatorHtml, GENAI_PRICING_CALCULATOR_URL),
-    );
-    return parseModelTokenPrices(
-      foundationHtml,
-      proprietaryHtml,
-      nowSeconds(),
-      calculatorJavascript,
-    ).catalogue.models;
+    const client = await loadModelCatalog();
+    try {
+      const [catalog, searchIndex] = await Promise.all([client.catalog(), client.searchIndex()]);
+      return { catalog, searchIndex };
+    } finally {
+      client.close();
+    }
   },
-  merge: mergePreferFreshRecord,
-});
-
-const latencyScoreCache = createMetadataCache<Readonly<Record<string, ModelLatencyScore>>>({
-  key: "model-latency",
-  fallback: latencySnapshot.catalogue.models,
-  load: async () =>
-    parseModelLatencyBenchmark(await loadJson(MODEL_LATENCY_BENCHMARK_URL), nowSeconds()).catalogue
-      .models,
-  merge: mergePreferFreshRecord,
-});
-
-const ratingsCache = createMetadataCache<Readonly<Record<string, ModelRating>>>({
-  key: "model-ratings",
-  fallback: ratingsSnapshot.catalogue.models,
-  load: async () => {
-    const { loadLMArenaCatalog } = await import("./lm-arena.ts");
-    return parseArenaModelRatings(await loadLMArenaCatalog(), nowSeconds()).catalogue.models;
-  },
-  merge: mergePreferFreshRecord,
-});
-
-const reasoningDocsCache = createMetadataCache<Readonly<Record<string, readonly string[]>>>({
-  key: "model-reasoning",
-  fallback: reasoningSnapshot.catalogue.models,
-  load: async () =>
-    parseReasoningModels(await loadPage(QUERY_REASON_MODELS_URL), nowSeconds()).catalogue.models,
-  merge: mergePreferFreshRecord,
-});
-
-const modelsDevCache = createMetadataCache<ModelsDevData>({
-  key: "models-dev-capabilities",
-  fallback: modelsDevSnapshot.capabilities,
-  load: async () => {
-    const snapshot = parseModelsDev(await loadJson(MODELS_DEV_API_URL), nowSeconds());
-    return snapshot.capabilities;
-  },
-  merge: mergeModelsDevData,
-});
-
-const modelParamsCache = createMetadataCache<ModelParamsCatalogue>({
-  key: "modelparams-reasoning",
-  fallback: modelParamsSnapshot.catalogue,
-  load: async () =>
-    parseModelParams(await loadJson(MODELPARAMS_DEV_MODELS_URL), nowSeconds()).catalogue,
-  merge: (input) => ({
-    reasoning: mergePreferFreshList({
-      fresh: input.fresh?.reasoning,
-      previous: input.previous?.reasoning,
-      fallback: input.fallback.reasoning,
-    }),
-    models: mergePreferFreshRecord({
-      fresh: input.fresh?.models,
-      previous: input.previous?.models,
-      fallback: input.fallback.models,
-    }),
-  }),
+  merge: ({ fresh, previous, fallback }) => fresh ?? previous ?? fallback,
 });
 
 const learnedReasoningCache = createMetadataCache<
@@ -296,25 +137,14 @@ function metadataIndex(): MetadataIndex {
 }
 
 function buildIndexFromCommitted(): MetadataIndex {
-  return buildIndex({
-    retiredNames: COMMITTED_RETIRED_MODELS,
-    capabilities: capabilitiesSnapshot.capabilities,
-    modelsDev: modelsDevSnapshot.capabilities,
-    modelParams: modelParamsSnapshot.catalogue,
-    rateLimits: rateLimitsSnapshot.catalogue.models,
-    tokenPrices: tokenPricesSnapshot.catalogue.models,
-    latencyScores: latencySnapshot.catalogue.models,
-    ratings: ratingsSnapshot.catalogue.models,
-    reasoning: reasoningSnapshot.catalogue.models,
-    learnedReasoning: {},
-  });
+  return buildIndex({ ...catalogMetadata(bundledModelCatalogIndex), learnedReasoning: {} });
 }
 
 function buildIndex(input: {
   readonly retiredNames: readonly string[];
   readonly capabilities: CapabilitySets;
   readonly modelsDev: ModelsDevData;
-  readonly modelParams: ModelParamsCatalogue;
+  readonly modelParams: CatalogMetadataInput["modelParams"];
   readonly rateLimits: Readonly<Record<string, ModelRateLimits>>;
   readonly tokenPrices: Readonly<Record<string, readonly ModelTokenPrice[]>>;
   readonly latencyScores: Readonly<Record<string, ModelLatencyScore>>;
@@ -391,39 +221,12 @@ let refreshInflight: Promise<MetadataIndex> | undefined;
 export async function refreshModelMetadata(): Promise<MetadataIndex> {
   if (refreshInflight) return refreshInflight;
   refreshInflight = (async () => {
-    const [
-      retiredNames,
-      capabilities,
-      modelsDev,
-      modelParams,
-      rateLimits,
-      tokenPrices,
-      latency,
-      ratings,
-      reasoning,
-      learnedReasoning,
-    ] = await Promise.all([
-      retiredCache.get(),
-      capabilitiesCache.get(),
-      modelsDevCache.get(),
-      modelParamsCache.get(),
-      rateLimitsCache.get(),
-      tokenPricesCache.get(),
-      latencyScoreCache.get(),
-      ratingsCache.get(),
-      reasoningDocsCache.get(),
+    const [{ catalog, searchIndex }, learnedReasoning] = await Promise.all([
+      catalogCache.get(),
       learnedReasoningCache.get(),
     ]);
     liveIndex = buildIndex({
-      retiredNames,
-      capabilities,
-      modelsDev,
-      modelParams,
-      rateLimits,
-      tokenPrices,
-      latencyScores: latency,
-      ratings,
-      reasoning,
+      ...catalogMetadata(createModelCatalogIndex(catalog, searchIndex)),
       learnedReasoning,
     });
     return liveIndex;
@@ -433,50 +236,20 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
   return refreshInflight;
 }
 
-/** Load shared cache entries without forcing a network refresh. */
+/** Load the bundled public catalog and locally learned reasoning levels. */
 export async function hydrateModelMetadata(): Promise<MetadataIndex> {
-  const [
-    retiredNames,
-    capabilities,
-    modelsDev,
-    modelParams,
-    rateLimits,
-    tokenPrices,
-    latency,
-    ratings,
-    reasoning,
-    learnedReasoning,
-  ] = await Promise.all([
-    peekOrFallback(retiredCache, COMMITTED_RETIRED_MODELS),
-    peekOrFallback(capabilitiesCache, capabilitiesSnapshot.capabilities),
-    peekOrFallback(modelsDevCache, modelsDevSnapshot.capabilities),
-    peekOrFallback(modelParamsCache, modelParamsSnapshot.catalogue),
-    peekOrFallback(rateLimitsCache, rateLimitsSnapshot.catalogue.models),
-    peekOrFallback(tokenPricesCache, tokenPricesSnapshot.catalogue.models),
-    peekOrFallback(latencyScoreCache, latencySnapshot.catalogue.models),
-    peekOrFallback(ratingsCache, ratingsSnapshot.catalogue.models),
-    peekOrFallback(reasoningDocsCache, reasoningSnapshot.catalogue.models),
-    peekOrFallback(learnedReasoningCache, {}),
+  const [catalogSnapshot, learnedReasoning] = await Promise.all([
+    catalogCache.peek().catch(() => undefined),
+    learnedReasoningCache.peek().catch(() => undefined),
   ]);
+  const catalog = catalogSnapshot
+    ? createModelCatalogIndex(catalogSnapshot.catalog, catalogSnapshot.searchIndex)
+    : bundledModelCatalogIndex;
   liveIndex = buildIndex({
-    retiredNames,
-    capabilities,
-    modelsDev,
-    modelParams,
-    rateLimits,
-    tokenPrices,
-    latencyScores: latency,
-    ratings,
-    reasoning,
-    learnedReasoning,
+    ...catalogMetadata(catalog),
+    learnedReasoning: learnedReasoning ?? {},
   });
   return liveIndex;
-}
-
-async function peekOrFallback<T>(cache: MetadataCache<T>, fallback: T): Promise<T> {
-  const peeked = await cache.peek();
-  if (peeked !== undefined) return peeked;
-  return cache.get().catch(() => fallback);
 }
 
 /** Return the committed reasoning-effort catalogue. Cached per process. */
@@ -682,8 +455,8 @@ export function estimateModelTokenPrice(
 }
 
 /**
- * Resolve reasoning levels: Databricks documentation, modelparams.dev,
- * learned errors, then family defaults.
+ * Resolve reasoning levels: published catalog metadata, learned errors, then
+ * family defaults.
  *
  * Does not parse error bodies; callers handling an upstream error should use
  * {@link learnReasoningLevelsFromError} so published levels keep precedence.
@@ -732,7 +505,7 @@ export function modelMetadataFor(model: string | ServingEndpointSummary): ModelM
   };
 }
 
-/** Return generation timestamps for the committed metadata snapshots. */
+/** Return the public catalog timestamp for each compatibility metadata field. */
 export function modelMetadataGeneratedAt(): Readonly<{
   retiredModels: number;
   capabilities: number;
@@ -744,16 +517,19 @@ export function modelMetadataGeneratedAt(): Readonly<{
   ratings: number;
   reasoning: number;
 }> {
+  const generatedAt = Math.floor(
+    new Date(bundledModelCatalogIndex.catalog.updated_at).getTime() / 1_000,
+  );
   return {
-    retiredModels: RETIRED_MODELS_GENERATED_AT,
-    capabilities: capabilitiesSnapshot.generatedAt,
-    modelsDev: modelsDevSnapshot.generatedAt,
-    modelParams: modelParamsSnapshot.generatedAt,
-    rateLimits: rateLimitsSnapshot.generatedAt,
-    tokenPrices: tokenPricesSnapshot.generatedAt,
-    latency: latencySnapshot.generatedAt,
-    ratings: ratingsSnapshot.generatedAt,
-    reasoning: reasoningSnapshot.generatedAt,
+    retiredModels: generatedAt,
+    capabilities: generatedAt,
+    modelsDev: generatedAt,
+    modelParams: generatedAt,
+    rateLimits: generatedAt,
+    tokenPrices: generatedAt,
+    latency: generatedAt,
+    ratings: generatedAt,
+    reasoning: generatedAt,
   };
 }
 
@@ -837,51 +613,4 @@ function optionalNonnegativeNumber(value: number | undefined, field: string): nu
 
 function modelKey(value: string): string | undefined {
   return modelSearchQuery(value)?.replaceAll(" ", "-");
-}
-
-async function loadPage(url: string): Promise<string> {
-  const response = await fetch(url, {
-    headers: { "user-agent": USER_AGENT },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    throw new Error(`Databricks documentation returned HTTP ${response.status}: ${url}`);
-  }
-  return response.text();
-}
-
-async function loadJson(url: string): Promise<unknown> {
-  const response = await fetch(url, {
-    headers: { "user-agent": USER_AGENT },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) {
-    throw new Error(`Model metadata source returned HTTP ${response.status}: ${url}`);
-  }
-  return response.json();
-}
-
-function mergeModelsDevData(input: {
-  readonly fresh: ModelsDevData | undefined;
-  readonly previous: ModelsDevData | undefined;
-  readonly fallback: ModelsDevData;
-}): ModelsDevData {
-  const capability = (key: keyof ModelsDevCapabilityCatalogue) =>
-    mergePreferFreshList({
-      fresh: input.fresh?.[key],
-      previous: input.previous?.[key],
-      fallback: input.fallback[key],
-    });
-  return {
-    imageInput: capability("imageInput"),
-    reasoning: capability("reasoning"),
-    tools: capability("tools"),
-    structuredOutput: capability("structuredOutput"),
-    temperatureSupported: capability("temperatureSupported"),
-    temperatureUnsupported: capability("temperatureUnsupported"),
-  };
-}
-
-function nowSeconds(): number {
-  return Math.floor(Date.now() / 1000);
 }

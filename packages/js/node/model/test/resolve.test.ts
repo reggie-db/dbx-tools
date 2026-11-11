@@ -348,6 +348,7 @@ describe("listServingEndpoints cache identity", () => {
       },
     };
     const host = "https://chat-only.example.com";
+    await clearServingEndpointsCache(host, "principal-a");
 
     const chatOnly = await listServingEndpoints(client, host, {
       cacheIdentity: "principal-a",
