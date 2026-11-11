@@ -74,9 +74,8 @@ function installedEngineVersion(root: string): string | undefined {
  *
  * Bootstrapping pins the engine once, so without this a workspace created months ago
  * would keep resolving its original engine no matter how current the CLI invoking it
- * is, and would fail inside THAT engine's code (`sync --watch` dying on a
- * `concurrently` it never declared). The two are released in lockstep, so this CLI's
- * version is exactly the engine it expects.
+ * is, and could fail inside that engine's outdated task implementation. The two are
+ * released in lockstep, so this CLI's version is exactly the engine it expects.
  *
  * Only ever moves FORWARD: an engine at or ahead of this CLI is left alone, so
  * an older CLI cannot downgrade a workspace.

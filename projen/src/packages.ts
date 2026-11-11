@@ -20,14 +20,14 @@
  * path relative to the root, reading NO manifest. {@link recordedPackages} reads
  * the recorded members from `pnpm-workspace.yaml` - the SOURCE OF TRUTH - and
  * augments each with the `name` and `tags` read back from its own `package.json`
- * (post-synth: barrels and watch), which is authoritative and so reflects any
+ * (post-synth: barrels and validation), which is authoritative and so reflects any
  * synth-time name override or resolved tag set.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
 import { projectUtils, relativePathWithin } from "@dbx-tools/core";
 import { findFilesSync } from "@dbx-tools/path";
-import { parseRecord, isRecord, toSlug, parseList } from "@dbx-tools/shared-core";
+import { parseRecord, isRecord, toSlug } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 import { DBXToolsConfigDataSchema, type DBXToolsConfigData } from "./dbx-tools-config.ts";
 import { isGenerated } from "./generated.ts";
@@ -221,8 +221,7 @@ function collectPackageDirs(rootAbs: string): string[] {
  * folder, at any depth, is one. Returns each as a {@link DiscoveredPackage} - its
  * path plus the tags implied by its path relative to the root
  * ({@link DiscoveredPackage.tagCandidates}); no `package.json` is read. Used by
- * the root project's scan at synth, and by the watcher to compare disk against the
- * recorded set. Sorted by member path.
+ * the root project's scan at synth. Sorted by member path.
  */
 export function scanPackages(
   projectRoot: string = resolveRepoRoot(),
@@ -302,25 +301,9 @@ function readManifestTags(
 }
 
 /**
- * Extra repo-root paths that trigger a full re-synth during `sync --watch`, read from
- * the root `package.json` `dbxToolsConfig.syncResynthPaths` (set via the
- * {@link DBXToolsProjectOptions.syncResynthPaths} option at synth).
- */
-export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): string[] {
-  const paths = readDbxToolsConfig(projectRoot)?.syncResynthPaths;
-  return Array.isArray(paths) ? parseList(paths.map((p) => String(p))) : [];
-}
-
-/** Projen task names supervised as focused processes by `sync --watch`. */
-export function syncWatchTasks(projectRoot: string = resolveRepoRoot()): string[] {
-  const tasks = readDbxToolsConfig(projectRoot)?.syncWatchTasks;
-  return Array.isArray(tasks) ? parseList(tasks.map((task) => String(task))) : [];
-}
-
-/**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
  * each augmented with the `tags` read back from its `package.json`. This is what
- * every post-synth command (barrels and watch) uses: the manifest is
+ * every post-synth command uses: the manifest is
  * authoritative, so it reflects the resolved tag set.
  * Sorted by path.
  */
@@ -403,24 +386,4 @@ export function workspaceDependencyDirectories(
   };
   visit(packageName);
   return [...directories].sort();
-}
-
-/**
- * The configured package roots plus every recorded member outside those roots.
- * Exact extra-member paths keep a nested member such as `packages/demo` from
- * broadening the watch boundary to unrelated siblings under `packages/`.
- * Older manifests without configured roots fall back to {@link DEFAULT_PACKAGE_ROOTS}.
- */
-export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[] {
-  const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
-  const configuredRoots = Array.isArray(configured)
-    ? parseList(configured.map((root) => String(root)))
-    : [];
-  const roots = new Set<string>(configuredRoots.length ? configuredRoots : DEFAULT_PACKAGE_ROOTS);
-  for (const member of readRecordedMembers(projectRoot)) {
-    if (configuredRoots.some((root) => member === root || member.startsWith(`${root}/`))) continue;
-    const pkg = packageOfMember(projectRoot, member);
-    if (pkg) roots.add(pkg.memberPath);
-  }
-  return [...roots];
 }

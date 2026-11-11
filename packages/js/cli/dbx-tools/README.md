@@ -168,7 +168,6 @@ Once the workspace is initialized, use its tasks directly:
 
 ```sh
 bun run sync
-bun run sync -- --watch
 bun run barrels
 ```
 
@@ -213,9 +212,9 @@ dbx dev [projenArgs...]
 
 #### Arguments
 
-| Argument     | Description                                         |
-| ------------ | --------------------------------------------------- |
-| `projenArgs` | Projen task and arguments, for example sync --watch |
+| Argument     | Description                                 |
+| ------------ | ------------------------------------------- |
+| `projenArgs` | Projen task and arguments, for example sync |
 
 ### `dbx appkit`
 

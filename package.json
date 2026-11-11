@@ -48,10 +48,8 @@
     "pypiTrustedPublisherInstructions": "projen pypiTrustedPublisherInstructions",
     "python-node-bindings": "projen python-node-bindings",
     "python-node-bindings:check": "projen python-node-bindings:check",
-    "python-node-bindings:watch": "projen python-node-bindings:watch",
     "python-node-runtime": "projen python-node-runtime",
     "python-node-runtime:check": "projen python-node-runtime:check",
-    "python-node-runtime:watch": "projen python-node-runtime:watch",
     "release": "projen release",
     "shared-core:usage": "projen shared-core:usage",
     "slop:review": "slop-detector review . --format json --config .slopconfig.yaml",
@@ -83,7 +81,6 @@
     "@typescript-eslint/parser": "^8",
     "bun": "1.4.2",
     "commander": "catalog:",
-    "concurrently": "catalog:",
     "constructs": "^10.0.0",
     "eslint": "^9",
     "eslint-config-prettier": "^10.1.8",
@@ -123,15 +120,6 @@
   "dbxToolsConfig": {
     "packageRoots": [
       "packages/js"
-    ],
-    "syncResynthPaths": [
-      "branding/brand.yaml",
-      "branding/assets",
-      "projen/src"
-    ],
-    "syncWatchTasks": [
-      "python-node-runtime:watch",
-      "python-node-bindings:watch"
     ]
   },
   "type": "module",

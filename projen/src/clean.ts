@@ -100,7 +100,7 @@ export async function listNodeModulesDirs(root: string = resolveRepoRoot()): Pro
  * A regular file has its read-only bit cleared first (so unlink also works on Windows);
  * a directory is removed recursively and is NOT chmod'd (file mode `0o644` would strip
  * a dir's traversal bit and break the recursive delete). Missing paths are ignored (a
- * racing watcher may have already removed one). Returns the count actually removed.
+ * concurrent process may have already removed one). Returns the count actually removed.
  */
 export function removePaths(paths: readonly string[]): number {
   let removed = 0;

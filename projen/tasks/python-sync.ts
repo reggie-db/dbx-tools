@@ -23,12 +23,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync, withFileLock } from "@dbx-tools/core";
 import { parse } from "smol-toml";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
-import {
-  TaskCheckOptionSchema,
-  TaskForceOptionSchema,
-  TaskProjectOptionSchema,
-} from "./options.ts";
+import { runTaskMain } from "./cli.ts";
 import { PYTHON_GENERATED_PACKAGE, PYTHON_SYNC_PACKAGE } from "../src/generated.ts";
 
 /** AST rewriter that points absolute imports of synchronized modules at their generated package. */
@@ -55,17 +50,18 @@ interface ParsedSource {
   readonly subdirectory?: string;
 }
 
-export async function main(args: readonly string[] = process.argv.slice(2)): Promise<void> {
-  const schema = z.object({
-    project: TaskProjectOptionSchema,
-    force: TaskForceOptionSchema,
-    check: TaskCheckOptionSchema,
-  });
-  const options = await taskOptions(
-    taskCommand(import.meta.url, "Synchronize pinned Git sources into Python packages", schema),
-    schema,
-    args,
-  );
+export const PythonSyncOptionsSchema = z
+  .object({
+    project: z.string().trim().min(1).describe("Project directory"),
+    force: z
+      .boolean()
+      .default(false)
+      .describe("Force regeneration even when outputs appear current"),
+    check: z.boolean().default(false).describe("Check generated state without writing changes"),
+  })
+  .describe("Synchronize pinned Git sources into Python packages");
+
+async function runPythonSync(options: z.output<typeof PythonSyncOptionsSchema>): Promise<void> {
   const project = resolve(options.project);
   const pyproject = parse(readFileSync(join(project, "pyproject.toml"), "utf8")) as {
     tool?: {
@@ -337,4 +333,4 @@ function makeReadonly(path: string): void {
   }
 }
 
-await runTaskMain(import.meta, main);
+export const main = await runTaskMain(import.meta, PythonSyncOptionsSchema, runPythonSync);

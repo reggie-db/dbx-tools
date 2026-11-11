@@ -457,19 +457,13 @@ export class DBXToolsPythonWorkspace extends Component {
           version: this.version,
         }),
     );
-    const syncWatchTasks: string[] = [];
     if (configuredNodeRuntime) {
-      const runtime = new PythonNodeRuntime(project, {
+      new PythonNodeRuntime(project, {
         projectDirectory: pythonPackagePath(this.repository, configuredNodeRuntime.directory),
       });
-      syncWatchTasks.push(runtime.watchTask.name);
     }
     if (this.packages.some((pkg) => pythonNodeBindings(pkg.packageOptions).length > 0)) {
-      const bindings = new PythonNodeBindings(project);
-      syncWatchTasks.push(bindings.watchTask.name);
-    }
-    if (syncWatchTasks.length && isDBXToolsJavaScriptProject()(project)) {
-      project.dbxToolsConfig.syncWatchTasks.push(...syncWatchTasks);
+      new PythonNodeBindings(project);
     }
     for (const pkg of this.packages) {
       if (!pkg.packageOptions.sync?.length) continue;

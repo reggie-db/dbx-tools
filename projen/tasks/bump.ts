@@ -4,12 +4,12 @@
  * generated version surface. This task has no git, registry, or publication
  * side effects; release preparation owns those operations.
  */
+import { join } from "node:path";
 import { projectUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions, taskRoot } from "./cli.ts";
-import { TaskRootOptionSchema } from "./options.ts";
-import { runSynth } from "../src/scaffold.ts";
+import { runTaskMain, taskRoot } from "./cli.ts";
+import { runTaskCommand } from "../src/_task-command.ts";
 import {
   resolveNextVersion,
   type VersionLevel,
@@ -18,26 +18,19 @@ import {
 
 const logger = log.logger("projen:bump");
 
-export const BumpOptionsSchema = z.object({
-  root: TaskRootOptionSchema,
-  level: z
-    .enum(["patch", "minor", "major"])
-    .default("patch")
-    .describe("Semantic version increment")
-    .meta({ short: "l" }),
-  synth: z.boolean().default(true).describe("Synchronize generated workspace versions"),
-});
+export const BumpOptionsSchema = z
+  .object({
+    root: z.string().trim().min(1).optional().describe("Repository or workspace root"),
+    level: z
+      .enum(["patch", "minor", "major"])
+      .default("patch")
+      .describe("Semantic version increment")
+      .meta({ short: "l" }),
+    synth: z.boolean().default(true).describe("Synchronize generated workspace versions"),
+  })
+  .describe("Increment VERSION and synchronize generated workspace versions");
 
-export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const options = await taskOptions(
-    taskCommand(
-      import.meta.url,
-      "Increment VERSION and synchronize generated workspace versions",
-      BumpOptionsSchema,
-    ),
-    BumpOptionsSchema,
-    args,
-  );
+export const main = await runTaskMain(import.meta, BumpOptionsSchema, (options) => {
   const root = taskRoot(options.root ?? projectUtils.root());
   const level: VersionLevel = options.level;
   const next = resolveNextVersion(root, level);
@@ -46,10 +39,12 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   writeWorkspaceVersion(root, next.version);
 
   if (options.synth) {
-    runSynth({ root, post: true });
-    runSynth({ root, post: true });
+    const env = { ...process.env };
+    delete env.PROJEN_DISABLE_POST;
+    const synth = (): void =>
+      runTaskCommand(root, process.execPath, [join(root, ".projenrc.ts")], { env });
+    synth();
+    synth();
   }
   logger.success(`workspace version synchronized at ${next.version}`);
-}
-
-await runTaskMain(import.meta, main);
+});

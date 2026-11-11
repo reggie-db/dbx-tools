@@ -6,7 +6,14 @@ import { describe, it } from "node:test";
 import { listenAddressSchema } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { z } from "zod";
-import { addArgs, parseArgs, parseArgv, serializeArgs } from "../src/args.ts";
+import {
+  addArgs,
+  addModuleArgs,
+  parseArgs,
+  parseArgv,
+  parseModuleArgv,
+  serializeArgs,
+} from "../src/args.ts";
 
 const schema = z.object({
   port: z.coerce.number().default(3000).describe("Server listening port").meta({ short: "p" }),
@@ -235,6 +242,44 @@ describe("parseArgv", () => {
       check: z.boolean().default(false).describe("Verify generated output").meta({ env: [] }),
     });
     assert.deepEqual(parseArgv(configured, ["--check"], isolated), { check: true });
+  });
+});
+
+describe("module argv", () => {
+  const moduleUrl = new URL("./release-options.ts", import.meta.url).href;
+  const configured = z
+    .object({
+      check: z.boolean().default(false).describe("Verify generated output"),
+    })
+    .describe("Export release options");
+
+  it("derives the command name and description from the module and schema", () => {
+    const command = addModuleArgs(moduleUrl, configured, {
+      environmentPrefix: "PROJEN",
+      sources: ["env"],
+    });
+    assert.equal(command.name(), "release-options");
+    assert.equal(command.description(), "Export release options");
+    assert.match(command.helpInformation(), /PROJEN_RELEASE_OPTIONS_CHECK/);
+  });
+
+  it("parses module-scoped environment values", () => {
+    const previous = process.env.PROJEN_RELEASE_OPTIONS_CHECK;
+    const previousScoped = process.env.DBX_TOOLS_PROJEN_RELEASE_OPTIONS_CHECK;
+    delete process.env.DBX_TOOLS_PROJEN_RELEASE_OPTIONS_CHECK;
+    process.env.PROJEN_RELEASE_OPTIONS_CHECK = "true";
+    try {
+      assert.deepEqual(
+        parseModuleArgv(moduleUrl, configured, [], {
+          environmentPrefix: "PROJEN",
+          sources: ["env"],
+        }),
+        { check: true },
+      );
+    } finally {
+      restoreEnvironment("PROJEN_RELEASE_OPTIONS_CHECK", previous);
+      restoreEnvironment("DBX_TOOLS_PROJEN_RELEASE_OPTIONS_CHECK", previousScoped);
+    }
   });
 });
 

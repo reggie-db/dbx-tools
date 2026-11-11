@@ -9,7 +9,6 @@ import type { Command } from "commander";
 import { z } from "zod";
 import { parsedTaskOptions, runTaskMain, taskCommand } from "./cli.ts";
 import { publishLocalRelease } from "./local-publish.ts";
-import { TaskDirectoriesOptionSchema, TaskRootOptionSchema } from "./options.ts";
 import { writeReleaseNotes } from "./release-notes.ts";
 import { assertReleaseVersion } from "./release-version.ts";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
@@ -732,7 +731,7 @@ export async function runRelease(
 const releaseStepFields = ReleaseStepSelectionSchema.unwrap().shape;
 
 export const ReleaseOptionsSchema = z.object({
-  root: TaskRootOptionSchema,
+  root: z.string().trim().min(1).optional().describe("Repository or workspace root"),
   branch: z.string().trim().min(1).default("main").describe("Release branch"),
   prefix: z.string().default("v").describe("Release tag prefix"),
   remote: z.string().trim().min(1).default("origin").describe("Git remote"),
@@ -742,7 +741,10 @@ export const ReleaseOptionsSchema = z.object({
     .min(1)
     .default("packages/py")
     .describe("Python package root for local publish"),
-  validate: TaskDirectoriesOptionSchema.describe("Repeatable task to run before pushing"),
+  validate: z
+    .array(z.string().trim().min(1))
+    .default([])
+    .describe("Repeatable task to run before pushing"),
   bump: z
     .boolean()
     .default(true)

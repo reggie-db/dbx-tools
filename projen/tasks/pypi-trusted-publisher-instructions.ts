@@ -1,6 +1,6 @@
 /** Parse and print generated PyPI trusted-publisher setup instructions. */
 import { z } from "zod";
-import { taskCommand, taskOptions } from "./cli.ts";
+import { parseTaskArgv } from "./cli.ts";
 
 export const PypiTrustedPublisherInstructionsOptionsSchema = z
   .object({
@@ -12,7 +12,7 @@ export const PypiTrustedPublisherInstructionsOptionsSchema = z
       .describe("Credential file used only when browser authentication is required")
       .meta({ env: [], helpDefault: false, short: false }),
   })
-  .describe("Options for rendering PyPI trusted-publisher setup instructions");
+  .describe("Print system-browser instructions for PyPI trusted publishers");
 
 /** Project-specific instruction sections wrapped around browser authentication guidance. */
 export interface PypiTrustedPublisherInstructions {
@@ -25,12 +25,8 @@ export async function printPypiTrustedPublisherInstructions(
   instructions: PypiTrustedPublisherInstructions,
   argv: readonly string[] = process.argv.slice(2),
 ): Promise<void> {
-  const { secretFile } = await taskOptions(
-    taskCommand(
-      import.meta.url,
-      "Print system-browser instructions for PyPI trusted publishers",
-      PypiTrustedPublisherInstructionsOptionsSchema,
-    ),
+  const { secretFile } = parseTaskArgv(
+    import.meta,
     PypiTrustedPublisherInstructionsOptionsSchema,
     argv,
   );

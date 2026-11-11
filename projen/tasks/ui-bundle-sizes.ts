@@ -1,3 +1,4 @@
+/** Report minified browser bundle sizes for the public AppKit UI subpaths. */
 import { resolve } from "node:path";
 import { runTaskMain } from "./cli.ts";
 

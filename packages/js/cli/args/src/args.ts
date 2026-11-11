@@ -8,6 +8,8 @@
  * @module
  */
 
+import { basename, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   configUtils,
   type ConfigOptions,
@@ -27,6 +29,12 @@ import { Command, Option } from "commander";
 
 /** Layered config lookup used to resolve argument values and help defaults. */
 export type CliArgsOptions = ConfigOptions;
+
+/** Configuration for a command whose name is derived from its source module. */
+export interface ModuleArgsOptions extends Omit<CliArgsOptions, "prefix"> {
+  /** Environment namespace inserted before the source-module command name. */
+  readonly environmentPrefix?: string;
+}
 
 /** CLI metadata read from a field's Zod `.meta()` value. */
 export interface CliArgMeta {
@@ -139,6 +147,35 @@ export function parseArgv<TSchema extends CliObjectSchema>(
   return parseArgs(command, schema, options);
 }
 
+/** Create a schema-bound command named and described by its source module. */
+export function addModuleArgs<TSchema extends CliObjectSchema>(
+  moduleUrl: string,
+  schema: TSchema,
+  options: ModuleArgsOptions = {},
+): Command {
+  const name = moduleName(moduleUrl);
+  const command = new Command().name(name);
+  const description = schemaDescription(schema);
+  if (description) command.description(description);
+  const { environmentPrefix, ...config } = options;
+  const prefix = environmentPrefix
+    ? `${environmentPrefix}_${[...tokenize(name)].join("_").toUpperCase()}`
+    : undefined;
+  return addArgs(command, schema, { ...config, ...(prefix ? { prefix } : {}) });
+}
+
+/** Parse argv for a command named and described by its source module. */
+export function parseModuleArgv<TSchema extends CliObjectSchema>(
+  moduleUrl: string,
+  schema: TSchema,
+  argv: readonly string[] = process.argv.slice(2),
+  options: ModuleArgsOptions = {},
+): ReturnType<TSchema["parse"]> {
+  const command = addModuleArgs(moduleUrl, schema, options);
+  command.parse([...argv], { from: "user" });
+  return parseArgs(command, schema);
+}
+
 /** Convert schema defaults or concrete option values into Commander arguments. */
 export function serializeArgs(source: ArgumentSource): string[] {
   if (isCliObjectSchema(source)) {
@@ -175,6 +212,18 @@ function fields(schema: CliObjectSchema): Field[] {
       short: json.short,
     };
   });
+}
+
+function moduleName(moduleUrl: string): string {
+  const file = basename(fileURLToPath(moduleUrl));
+  return file.slice(0, -extname(file).length);
+}
+
+function schemaDescription(schema: CliObjectSchema): string | undefined {
+  const document = schema.toJSONSchema();
+  return isRecord(document) && typeof document.description === "string"
+    ? document.description
+    : undefined;
 }
 
 function isCliObjectSchema(value: ArgumentSource): value is CliObjectSchema {

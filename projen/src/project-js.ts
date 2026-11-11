@@ -56,6 +56,7 @@ import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig, type DBXToolsRootTsconfigOptions } from "./tsconfig.ts";
 import { configureVsCode } from "./vscode.ts";
+import { isIntegrationTest, workspaceGraph, workspaceTestFiles } from "./workspace-validation.ts";
 import { readWorkspaceVersion, syncWorkspaceManifestVersion } from "./workspace-version.ts";
 
 /**
@@ -657,11 +658,6 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly appRoot?: string | false;
     /** Minimal generated bundle settings, or false for an application-owned bundle. */
     readonly appBundle?: false | AppKitBundleOptions;
-    /**
-     * Extra repo-root paths that trigger a full re-synth during `sync --watch`
-     * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
-     */
-    readonly syncResynthPaths?: readonly string[];
     /** GitHub Pages documentation included in the unified release workflow. */
     readonly releaseDocs?: ReleaseDocsOptions;
     /** Python package root passed to local release preparation when configured. */
@@ -947,10 +943,9 @@ function resolveRootWorkspace(
  * Node bindings, then package barrels. Python binding generation owns cleanup,
  * so removing a configured package or module cannot leave stale files behind.
  *
- * projen only runs `postSynthesize` when `PROJEN_DISABLE_POST` is unset, so this
- * is skipped during the watcher's fast `runSynth` (which sets it); there barrels
- * are rebuilt explicitly. It also runs after `NodeProject`'s own post-synth
- * install, so codegen's `node_modules/...` inputs resolve.
+ * Projen runs `postSynthesize` only when `PROJEN_DISABLE_POST` is unset. This
+ * component runs after `NodeProject`'s post-synth install, so codegen's
+ * `node_modules/...` inputs resolve.
  */
 class GeneratedSource extends Component {
   public override preSynthesize(): void {
@@ -991,11 +986,14 @@ class GeneratedSource extends Component {
  * a few TypeScript processes and runs custom package lifecycles alongside them.
  * Tests use a small number of root runner groups, skip packages without tests,
  * and expose focused, changed, unit, integration, and full tiers. The compile
- * and test tasks read Projen's generated `pnpm-workspace.yaml`, so a newly
- * recorded member needs no additional task configuration.
+ * and test tasks are composed during synthesis from the recorded workspace.
  */
 class WorkspaceValidationTasks extends Component {
   private configured = false;
+
+  private readonly testUnit?: Task;
+  private readonly testIntegration?: Task;
+  private readonly testAll?: Task;
 
   public constructor(project: DBXToolsNodeProject | DBXToolsTypeScriptProject) {
     super(project);
@@ -1014,33 +1012,93 @@ class WorkspaceValidationTasks extends Component {
       execArgs: taskCommand("test-workspace.ts", "changed"),
       receiveArgs: true,
     });
-    project.addTask("test:unit", {
+    this.testUnit = project.addTask("test:unit", {
       description: "Run unit tests in grouped root runners",
-      execArgs: taskCommand("test-workspace.ts", "unit"),
     });
-    project.addTask("test:integration", {
+    this.testIntegration = project.addTask("test:integration", {
       description: "Run integration and packed-consumer tests",
-      execArgs: taskCommand("test-workspace.ts", "integration"),
     });
-    project.addTask("test:all", {
+    this.testAll = project.addTask("test:all", {
       description: "Run all JavaScript, TypeScript, and Python tests",
-      execArgs: taskCommand("test-workspace.ts", "all"),
     });
   }
 
   public override preSynthesize(): void {
     if (this.configured) return;
     this.configured = true;
+    if (!this.testUnit || !this.testIntegration || !this.testAll) return;
     const project = this.project as DBXToolsNodeProject | DBXToolsTypeScriptProject;
     if (project.subprojects.length === 0 && project.extraWorkspaceMembers.length === 0) {
       return;
     }
-    project.compileTask.execArgs(taskCommand("compile-workspace.ts"));
-    const testAll = project.tasks.tryFind("test:all")!;
+    const root = resolve(project.outdir);
+    const typescriptConfigs = ["tsconfig.json"];
+    const customProjects: Array<{ readonly directory: string; readonly project: Project }> = [];
+    for (const subproject of project.subprojects) {
+      if (!(subproject instanceof javascript.NodeProject)) continue;
+      const directory = toPosix(relative(root, subproject.outdir));
+      if (plainTypeScriptCompile(subproject)) {
+        typescriptConfigs.push(`${directory}/tsconfig.json`);
+      } else {
+        customProjects.push({ directory, project: subproject });
+      }
+    }
+    project.compileTask.execArgs(["bunx", "tsc", "--build", ...typescriptConfigs]);
+    for (const custom of customProjects) {
+      for (const task of ["pre-compile", "compile", "post-compile"]) {
+        project.compileTask.execArgs(["bun", "run", task], { cwd: custom.directory });
+      }
+    }
+    for (const directory of project.extraWorkspaceMembers) {
+      const scripts = readPackageManifest(resolve(root, directory))?.scripts;
+      if (!isRecord(scripts)) continue;
+      for (const task of ["pre-compile", "compile", "post-compile"]) {
+        if (typeof scripts[task] === "string") {
+          project.compileTask.execArgs(["bun", "run", task], { cwd: directory });
+        }
+      }
+    }
+
+    const graph = workspaceGraph(root);
+    const tests = workspaceTestFiles(root, graph);
+    const unit = tests
+      .filter((path) => !isIntegrationTest(path))
+      .map((path) => toPosix(relative(root, path)));
+    const integration = tests
+      .filter(isIntegrationTest)
+      .map((path) => toPosix(relative(root, path)));
+    if (unit.length > 0) this.testUnit.execArgs(["bun", "test", ...unit]);
+    if (integration.length > 0) {
+      this.testIntegration.execArgs(["bun", "test", ...integration]);
+    }
+    this.testAll.spawn(this.testUnit);
+    this.testAll.spawn(this.testIntegration);
     const pythonTests = project.tasks.tryFind("py:test");
-    if (pythonTests) testAll.spawn(pythonTests);
-    project.testTask.spawn(testAll);
+    if (pythonTests) this.testAll.spawn(pythonTests);
+    project.testTask.spawn(this.testAll);
   }
+}
+
+function taskHasRuntimeOptions(task: Task): boolean {
+  return Boolean(task.condition || task.cwd || task.shell || Object.keys(task.envVars).length > 0);
+}
+
+function taskHasLifecycle(task: Task): boolean {
+  return taskHasRuntimeOptions(task) || task.steps.length > 0;
+}
+
+function plainTypeScriptCompile(project: Project): boolean {
+  const compile = project.compileTask;
+  const [step] = compile.steps;
+  return (
+    !taskHasRuntimeOptions(compile) &&
+    compile.steps.length === 1 &&
+    step?.execArgs?.length === 2 &&
+    step.execArgs[0] === "tsc" &&
+    step.execArgs[1] === "--build" &&
+    !taskHasLifecycle(project.preCompileTask) &&
+    !taskHasLifecycle(project.postCompileTask)
+  );
 }
 
 /**
@@ -1265,7 +1323,8 @@ function registerRootTasks(project: javascript.NodeProject): void {
     receiveArgs: true,
   });
   project.addTask("sync", {
-    execArgs: taskCommand("sync.ts"),
+    description: "Synthesize project files once or continuously with --watch",
+    exec: project.projenCommand,
     receiveArgs: true,
   });
 }
@@ -1349,9 +1408,6 @@ function initProject(
       : (options.appRoot ??
         (existsSync(resolve(rootAbs, "packages/app")) ? "packages/app" : undefined));
   project.dbxToolsConfig.packageRoots = [...roots];
-  if (options.syncResynthPaths?.length) {
-    project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
-  }
 
   configureVsCode(project);
 

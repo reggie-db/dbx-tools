@@ -111,9 +111,9 @@ In this repository, use the root tasks:
 ```bash
 bun run python-node-runtime
 bun run python-node-runtime:check
-bun run python-node-runtime:watch
 ```
 
-`bun run sync --watch` supervises `python-node-runtime:watch` with the shared
-Python binding, barrel, and Projen configuration watchers. Don't edit the
-generated `runtime.js` file directly.
+The root build runs `python-node-runtime` before compilation, and the root test
+runs `python-node-runtime:check`. `bun run sync` also regenerates the runtime as
+part of one complete synthesis. Don't edit the generated `runtime.js` file
+directly.

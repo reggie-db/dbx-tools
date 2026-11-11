@@ -54,13 +54,6 @@ import { relativePathWithin } from "@dbx-tools/core";
 import { isRecord, log, mapConcurrent, sequence } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals, taskRoot } from "./cli.ts";
-import {
-  TaskConcurrencyOptionSchema,
-  TaskDirectoriesOptionSchema,
-  TaskDryRunOptionSchema,
-  TaskOutputOptionSchema,
-  TaskRootOptionSchema,
-} from "./options.ts";
 import { publishNpmArchives } from "./publish-npm.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 import { applyPublishConfig, packNpmPackage } from "../src/npm-packaging.ts";
@@ -117,7 +110,7 @@ function outputDirectory(root: string, value: string | undefined): string | unde
 }
 
 export const PublishOptionsSchema = z.object({
-  root: TaskRootOptionSchema,
+  root: z.string().trim().min(1).optional().describe("Repository or workspace root"),
   registry: z
     .string()
     .trim()
@@ -125,11 +118,14 @@ export const PublishOptionsSchema = z.object({
     .optional()
     .describe("npm registry URL")
     .meta({ env: "NPM_CONFIG_REGISTRY" }),
-  output: TaskOutputOptionSchema,
-  exclude: TaskDirectoriesOptionSchema.describe("Repeatable workspace directory to exclude"),
-  dryRun: TaskDryRunOptionSchema,
+  output: z.string().trim().min(1).optional().describe("Output directory"),
+  exclude: z
+    .array(z.string().trim().min(1))
+    .default([])
+    .describe("Repeatable workspace directory to exclude"),
+  dryRun: z.boolean().default(false).describe("Validate artifacts without publishing them"),
   skipCompile: z.boolean().default(false).describe("Reuse already validated compiled output"),
-  concurrency: TaskConcurrencyOptionSchema.default(4),
+  concurrency: z.coerce.number().int().positive().default(4).describe("Maximum concurrent workers"),
 });
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {

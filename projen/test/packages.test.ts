@@ -3,12 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import {
-  DiscoveredPackage,
-  recordedPackages,
-  recordedRoots,
-  workspaceDependencyNames,
-} from "../src/packages.ts";
+import { DiscoveredPackage, recordedPackages, workspaceDependencyNames } from "../src/packages.ts";
 import { DBXToolsNodeProject } from "../src/project-js.ts";
 
 let outdir: string;
@@ -26,26 +21,7 @@ after(() => {
   rmSync(outdir, { recursive: true, force: true });
 });
 
-describe("recordedRoots", () => {
-  it("returns configured package roots and extra workspace member roots", () => {
-    const project = new DBXToolsNodeProject({
-      name: "fixture",
-      outdir,
-      packageRoots: ["packages/js"],
-      extraWorkspaceMembers: ["packages/demo", "tooling"],
-      defaultTagMixins: false,
-      github: false,
-    });
-
-    project.synth();
-
-    const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
-      dbxToolsConfig?: { packageRoots?: string[] };
-    };
-    assert.deepEqual(manifest.dbxToolsConfig?.packageRoots, ["packages/js"]);
-    assert.deepEqual(recordedRoots(outdir), ["packages/js", "packages/demo", "tooling"]);
-  });
-
+describe("package roots", () => {
   it("prefers packages/js when the conventional JavaScript root exists", () => {
     const root = mkdtempSync(join(tmpdir(), "packages-js-default-"));
     try {

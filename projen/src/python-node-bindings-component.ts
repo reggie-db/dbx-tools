@@ -8,9 +8,6 @@ export const PYTHON_NODE_BINDINGS_TASK = "python-node-bindings";
 /** Repository-wide task that verifies every generated Python Node bridge. */
 export const PYTHON_NODE_BINDINGS_CHECK_TASK = `${PYTHON_NODE_BINDINGS_TASK}:check`;
 
-/** Repository-wide task that watches every configured Python Node bridge. */
-export const PYTHON_NODE_BINDINGS_WATCH_TASK = `${PYTHON_NODE_BINDINGS_TASK}:watch`;
-
 /** One function replaced only in a generated PythonMonkey bundle. */
 export interface PythonNodeFunctionOverride {
   /** Module specifier imported by the ordinary Node source. */
@@ -42,14 +39,12 @@ export interface PythonNodeBindingsComponentOptions {
 }
 
 /**
- * Registers one build, freshness, and watch lifecycle for every configured
+ * Registers one build and freshness lifecycle for every configured
  * `[tool.dbx_tools.node_bindings]` table in the repository.
  */
 export class PythonNodeBindings extends Component {
   readonly buildTask: Task;
   readonly checkTask: Task;
-  readonly watchTask: Task;
-
   constructor(project: Project, options: PythonNodeBindingsComponentOptions = {}) {
     super(project);
     const command = taskCommand("python-node-bindings.ts");
@@ -60,10 +55,6 @@ export class PythonNodeBindings extends Component {
     this.checkTask = project.addTask(PYTHON_NODE_BINDINGS_CHECK_TASK, {
       description: "Verify every configured Python Node binding is current",
       execArgs: [...command, "--check"],
-    });
-    this.watchTask = project.addTask(PYTHON_NODE_BINDINGS_WATCH_TASK, {
-      description: "Watch and regenerate affected Python Node bindings",
-      execArgs: taskCommand("python-node-bindings-watch.ts"),
     });
     project.preCompileTask.spawn(this.buildTask);
     if (options.test ?? true) project.testTask.spawn(this.checkTask);

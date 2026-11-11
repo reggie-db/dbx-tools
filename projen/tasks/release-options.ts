@@ -2,26 +2,19 @@
 /** Export the current annotated release tag's step selection to GitHub Actions. */
 import { appendFileSync } from "node:fs";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { runTaskMain } from "./cli.ts";
 import { captureTaskCommand } from "../src/_task-command.ts";
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
 
-export const ReleaseOptionsTaskSchema = z.object({
-  tag: z.string().trim().min(1).describe("Annotated release tag"),
-  output: z.string().trim().min(1).describe("GitHub Actions output file"),
-});
+export const ReleaseOptionsTaskSchema = z
+  .object({
+    tag: z.string().trim().min(1).describe("Annotated release tag"),
+    output: z.string().trim().min(1).describe("GitHub Actions output file"),
+  })
+  .describe("Export release tag selections to GitHub Actions");
 
 /** Verify and export a tag policy using the shared annotated-tag contract. */
-export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const values = await taskOptions(
-    taskCommand(
-      import.meta.url,
-      "Export release tag selections to GitHub Actions",
-      ReleaseOptionsTaskSchema,
-    ),
-    ReleaseOptionsTaskSchema,
-    args,
-  );
+export const main = await runTaskMain(import.meta, ReleaseOptionsTaskSchema, (values) => {
   const annotation = captureTaskCommand(
     process.cwd(),
     "git",
@@ -36,6 +29,4 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       .map(([name, enabled]) => `${name}=${enabled}\n`)
       .join(""),
   );
-}
-
-await runTaskMain(import.meta, main);
+});

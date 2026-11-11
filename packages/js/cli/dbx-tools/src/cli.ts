@@ -98,7 +98,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   program
     .command("dev")
     .description("Bootstrap or repair a dbx-tools workspace, then forward to projen")
-    .argument("[projenArgs...]", "Projen task and arguments, for example sync --watch")
+    .argument("[projenArgs...]", "Projen task and arguments, for example sync")
     .allowUnknownOption()
     .allowExcessArguments()
     .helpOption(false)

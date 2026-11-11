@@ -4,7 +4,7 @@
  * and any other toolchain file stamped via {@link stampGenerated}.
  *
  * projen already writes its own generated files read-only with a marker; these give
- * barrels and other watch-time output the same contract - a do-not-edit header and a
+ * barrels and other generated output the same contract - a do-not-edit header and a
  * read-only (0o444) bit. Rewriting one therefore goes through {@link makeWritable}
  * first, then {@link stampGenerated}.
  */
@@ -36,7 +36,7 @@ export function makeReadonly(file: string): void {
 export interface HeaderOpts {
   /** Line-comment prefix. Defaults to `//`. */
   readonly comment?: "//" | "#";
-  /** What produced the file, e.g. `"projen watch"`. */
+  /** What produced the file, e.g. `"projen barrels"`. */
   readonly tool: string;
   /** What the file is derived from, e.g. `"the exporting modules beside it"`. */
   readonly source?: string;
@@ -47,7 +47,9 @@ export function header(opts: HeaderOpts): string {
   const comment = opts.comment ?? "//";
   const lines = [`${comment} ${MARKER} ${opts.tool} - DO NOT EDIT.`];
   if (opts.source) lines.push(`${comment} Regenerated from ${opts.source}.`);
-  lines.push(`${comment} Hand edits are overwritten on the next watch; this file is read-only.`);
+  lines.push(
+    `${comment} Hand edits are overwritten on the next generation; this file is read-only.`,
+  );
   return `${lines.join("\n")}\n`;
 }
 

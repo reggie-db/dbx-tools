@@ -8,20 +8,17 @@
  */
 import { relative } from "node:path";
 import { log } from "@dbx-tools/shared-core";
-import { runTaskMain, taskCommand, taskOptions, taskRoot } from "./cli.ts";
-import { TaskRootOptionSchema } from "./options.ts";
+import { z } from "zod";
+import { runTaskMain, taskRoot } from "./cli.ts";
 import { BunLockfileOptionsSchema, normalizeBunLockfileAt } from "../src/bun-lockfile.ts";
 
 const logger = log.logger("projen:bun-lockfile");
 
-const TaskSchema = BunLockfileOptionsSchema.extend({ root: TaskRootOptionSchema });
+const TaskSchema = BunLockfileOptionsSchema.extend({
+  root: z.string().trim().min(1).optional().describe("Repository or workspace root"),
+}).describe("Keep bun.lock free of private npm registry URLs");
 
-export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const { root, ...options } = await taskOptions(
-    taskCommand(import.meta.url, "Keep bun.lock free of private npm registry URLs", TaskSchema),
-    TaskSchema,
-    args,
-  );
+export const main = await runTaskMain(import.meta, TaskSchema, ({ root, ...options }) => {
   const result = normalizeBunLockfileAt(taskRoot(root), options);
   if (!result.exists || !result.changed) return;
   const file = relative(process.cwd(), result.path) || result.path;
@@ -31,6 +28,4 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     );
   }
   logger.info(`rewrote ${result.rewritten} private registry tarball URLs`, { file });
-}
-
-await runTaskMain(import.meta, main);
+});

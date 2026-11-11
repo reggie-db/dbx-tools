@@ -4,8 +4,7 @@ import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { log, mapConcurrent } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
-import { TaskConcurrencyOptionSchema, TaskDryRunOptionSchema } from "./options.ts";
+import { runTaskMain } from "./cli.ts";
 import {
   publishNpmArchive,
   readNpmArchiveIdentity,
@@ -101,28 +100,28 @@ export async function publishNpmArchives(options: {
 }
 
 /** Parse npm archive publication options and execute the publisher. */
-export const PublishNpmOptionsSchema = z.object({
-  directory: z.string().trim().min(1).describe("Directory containing npm archives"),
-  version: z.string().trim().min(1).optional().describe("Expected npm release version"),
-  registry: z
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe("npm registry URL")
-    .meta({ env: "NPM_CONFIG_REGISTRY" }),
-  dryRun: TaskDryRunOptionSchema,
-  concurrency: TaskConcurrencyOptionSchema.default(DEFAULT_PUBLISH_CONCURRENCY),
-});
+export const PublishNpmOptionsSchema = z
+  .object({
+    directory: z.string().trim().min(1).describe("Directory containing npm archives"),
+    version: z.string().trim().min(1).optional().describe("Expected npm release version"),
+    registry: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("npm registry URL")
+      .meta({ env: "NPM_CONFIG_REGISTRY" }),
+    dryRun: z.boolean().default(false).describe("Validate artifacts without publishing them"),
+    concurrency: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(DEFAULT_PUBLISH_CONCURRENCY)
+      .describe("Maximum concurrent workers"),
+  })
+  .describe("Publish validated npm release archives");
 
 /** Parse task options and publish validated npm release archives. */
-export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const options = await taskOptions(
-    taskCommand(import.meta.url, "Publish validated npm release archives", PublishNpmOptionsSchema),
-    PublishNpmOptionsSchema,
-    args,
-  );
+export const main = await runTaskMain(import.meta, PublishNpmOptionsSchema, async (options) => {
   await publishNpmArchives(options);
-}
-
-await runTaskMain(import.meta, main);
+});

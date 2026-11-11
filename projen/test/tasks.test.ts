@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -13,6 +13,7 @@ interface TaskStep {
   execArgs?: string[];
   cwd?: string;
   condition?: string;
+  receiveArgs?: boolean;
 }
 
 interface TaskManifest {
@@ -41,6 +42,9 @@ function synthTasks(): {
     name: "@fixture/member",
   });
   root.addTask("py:test", { exec: "uv run pytest" });
+  mkdirSync(join(outdir, "test"), { recursive: true });
+  writeFileSync(join(outdir, "test/root.test.ts"), "export {};\n");
+  writeFileSync(join(outdir, "test/root.integration.test.ts"), "export {};\n");
   root.synth();
 
   const read = (path: string): TaskManifest =>
@@ -60,14 +64,13 @@ function synthTasks(): {
 describe("workspace validation tasks", () => {
   const tasks = synthTasks();
 
-  // A projen monorepo root gets EMPTY compile/test tasks, so `bun run build`
-  // validated nothing. Compile batches plain TypeScript members in a few processes,
-  // while tests delegate to grouped root runners. Both read the current
-  // package.json member list, so a new package needs no re-synth.
+  // A Projen monorepo root gets empty compile/test tasks, so `bun run build`
+  // validated nothing. Synthesis composes child TypeScript configs and stable test
+  // paths directly into the root task graph.
   it("covers every workspace member from root compile and test", () => {
     assert.deepEqual(
       tasks.root.tasks.compile.steps?.map((step) => step.execArgs),
-      [["bun", "node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"]],
+      [["bunx", "tsc", "--build", "tsconfig.json", "packages/member/tsconfig.json"]],
     );
     assert.deepEqual(
       tasks.root.tasks.test.steps?.map((step) => step.exec ?? `spawn:${step.spawn}`),
@@ -89,9 +92,19 @@ describe("workspace validation tasks", () => {
     assert.equal(tasks.root.tasks["test:focused"]?.steps?.[0]?.receiveArgs, true);
     assert.equal(tasks.root.tasks["test:changed"]?.steps?.[0]?.receiveArgs, true);
     assert.deepEqual(
-      tasks.root.tasks["test:all"]?.steps?.filter((step) => step.spawn === "py:test"),
-      [{ spawn: "py:test" }],
+      tasks.root.tasks["test:all"]?.steps?.map((step) => step.spawn),
+      ["test:unit", "test:integration", "py:test"],
     );
+    assert.deepEqual(tasks.root.tasks["test:unit"]?.steps?.[0]?.execArgs, [
+      "bun",
+      "test",
+      "test/root.test.ts",
+    ]);
+    assert.deepEqual(tasks.root.tasks["test:integration"]?.steps?.[0]?.execArgs, [
+      "bun",
+      "test",
+      "test/root.integration.test.ts",
+    ]);
   });
 
   it("checks lint without mutating and exposes fixes explicitly", () => {
@@ -104,6 +117,10 @@ describe("workspace validation tasks", () => {
     assert.match(lintCommand, /\btooling$/);
     assert.doesNotMatch(lintCommand, /\bprojen\b/);
     assert.equal(fixCommand, "bun run eslint -- --fix");
+  });
+
+  it("forwards sync flags to native Projen synthesis", () => {
+    assert.deepEqual(tasks.root.tasks.sync.steps, [{ exec: "bunx projen", receiveArgs: true }]);
   });
 
   // The root test delegates to test:all exactly once and must not re-enter itself.
@@ -131,7 +148,7 @@ describe("workspace validation tasks", () => {
     );
   });
 
-  it("keeps watcher dependencies in the engine and tracks generated extra-member barrels", () => {
+  it("removes the watcher-only dependency and tracks generated extra-member barrels", () => {
     assert.equal(tasks.packageJson.devDependencies?.concurrently, undefined);
     assert.match(tasks.prettierIgnore, /^tooling\/index\*\.ts$/m);
     assert.match(tasks.prettierIgnore, /^packages\/member\/index\*\.ts$/m);

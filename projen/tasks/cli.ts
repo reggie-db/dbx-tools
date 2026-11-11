@@ -1,27 +1,15 @@
 /** Shared Commander and entrypoint integration for Projen task CLIs. */
-import { basename, extname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { addArgs, parseArgs, type CliArgsOptions } from "@dbx-tools/cli-args";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { addModuleArgs, parseArgs, parseModuleArgv } from "@dbx-tools/cli-args";
 import { projectUtils } from "@dbx-tools/core";
-import { tokenize } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { z } from "zod";
 
-/** Stable task name derived from its source filename. */
-export function taskName(moduleUrl: string): string {
-  const file = basename(fileURLToPath(moduleUrl));
-  return file.slice(0, -extname(file).length);
-}
-
-/** Config resolution shared by task schemas. */
-export function taskCliArgsOptions(moduleUrl: string): CliArgsOptions {
-  const prefix = [...tokenize(taskName(moduleUrl))].join("_").toUpperCase();
-  return {
-    cwd: process.cwd(),
-    prefix: `PROJEN_${prefix}`,
-    sources: ["env", "dotenv"],
-  };
-}
+const TASK_ARGS_OPTIONS = {
+  environmentPrefix: "PROJEN",
+  sources: ["env", "dotenv"],
+} as const;
 
 /** Create a task command and bind every Zod-owned option through cli-args. */
 export function taskCommand<T extends z.ZodRawShape>(
@@ -29,11 +17,16 @@ export function taskCommand<T extends z.ZodRawShape>(
   description: string,
   schema: z.ZodObject<T>,
 ): Command {
-  return addArgs(
-    new Command().name(taskName(moduleUrl)).description(description),
-    schema,
-    taskCliArgsOptions(moduleUrl),
-  );
+  return addModuleArgs(moduleUrl, schema, TASK_ARGS_OPTIONS).description(description);
+}
+
+/** Parse one Projen task module through its owning Zod schema. */
+export function parseTaskArgv<T extends z.ZodRawShape>(
+  meta: ImportMeta,
+  schema: z.ZodObject<T>,
+  argv: readonly string[] = process.argv.slice(2),
+): z.output<z.ZodObject<T>> {
+  return parseModuleArgv(meta.url, schema, argv, TASK_ARGS_OPTIONS);
 }
 
 /** Parse one task's flags and layered environment values through its schema. */
@@ -71,10 +64,29 @@ export function isTaskMain(meta: ImportMeta): boolean {
   return Boolean(entry && pathToFileURL(resolve(entry)).href === meta.url);
 }
 
-/** Run a task only when its module is the active process entrypoint. */
-export async function runTaskMain(
+/** Run an existing task main only when its module is the active process entrypoint. */
+export function runTaskMain(meta: ImportMeta, main: () => void | Promise<void>): Promise<void>;
+
+/** Build a schema-driven task main and run it when its module is the active entrypoint. */
+export function runTaskMain<T extends z.ZodRawShape>(
   meta: ImportMeta,
-  main: () => void | Promise<void>,
-): Promise<void> {
+  schema: z.ZodObject<T>,
+  handler: (options: z.output<z.ZodObject<T>>) => void | Promise<void>,
+): Promise<(argv?: readonly string[]) => Promise<void>>;
+
+export async function runTaskMain<T extends z.ZodRawShape>(
+  meta: ImportMeta,
+  mainOrSchema: (() => void | Promise<void>) | z.ZodObject<T>,
+  handler?: (options: z.output<z.ZodObject<T>>) => void | Promise<void>,
+): Promise<void | ((argv?: readonly string[]) => Promise<void>)> {
+  if (typeof mainOrSchema === "function") {
+    if (isTaskMain(meta)) await mainOrSchema();
+    return;
+  }
+  if (!handler) throw new TypeError("Schema-driven task main requires a handler");
+  const main = async (argv: readonly string[] = process.argv.slice(2)): Promise<void> => {
+    await handler(parseTaskArgv(meta, mainOrSchema, argv));
+  };
   if (isTaskMain(meta)) await main();
+  return main;
 }

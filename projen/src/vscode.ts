@@ -1,9 +1,8 @@
 /**
  * Root `.vscode/*` files: settings, extension recommendations, and tasks.
  *
- * Prettier is projen's built-in component (not emitted here). The auto-run watcher
- * is delivered by `.vscode/tasks.json` (`runOn: folderOpen`) - projen has no native
- * tasks.json component, so a `JsonFile` is the idiomatic emitter.
+ * Prettier is projen's built-in component (not emitted here). Projen has no native
+ * tasks.json component, so a `JsonFile` emits the folder-open synthesis watcher.
  */
 import { existsSync, readFileSync } from "node:fs";
 
@@ -94,8 +93,7 @@ export function configureVsCode(scope: javascript.NodeProject): void {
       tasks: [
         {
           label: "sync",
-          detail:
-            "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrel watcher",
+          detail: "projen --watch - automatically resynthesize generated files and barrels",
           type: "shell",
           command: "bun run sync -- --watch",
           isBackground: true,

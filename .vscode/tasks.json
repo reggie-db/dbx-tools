@@ -3,7 +3,7 @@
   "tasks": [
     {
       "label": "sync",
-      "detail": "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrel watcher",
+      "detail": "projen --watch - automatically resynthesize generated files and barrels",
       "type": "shell",
       "command": "bun run sync -- --watch",
       "isBackground": true,

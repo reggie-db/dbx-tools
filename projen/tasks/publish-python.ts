@@ -2,11 +2,6 @@
 /** Build or publish selected Python workspace distributions. */
 import { z } from "zod";
 import { runTaskMain, taskCommand, taskOptions, taskPositionals } from "./cli.ts";
-import {
-  TaskDirectoriesOptionSchema,
-  TaskDryRunOptionSchema,
-  TaskOutputOptionSchema,
-} from "./options.ts";
 import { buildPythonProjects, publishPythonProjects } from "../src/python-packaging.ts";
 
 /** Parse command-line publication options and run the Python release task. */
@@ -14,13 +9,16 @@ export const PublishPythonOptionsSchema = z.object({
   indexUrl: z.string().trim().min(1).optional().describe("devpi Simple API URL"),
   publishUrl: z.string().trim().min(1).optional().describe("devpi writable index URL"),
   root: z.string().trim().min(1).default("packages/py").describe("Python workspace package root"),
-  package: TaskDirectoriesOptionSchema.describe("Repeatable Python package directory to build"),
-  output: TaskOutputOptionSchema.describe("Build distributions into this directory"),
+  package: z
+    .array(z.string().trim().min(1))
+    .default([])
+    .describe("Repeatable Python package directory to build"),
+  output: z.string().trim().min(1).optional().describe("Build distributions into this directory"),
   packageDirectories: z
     .boolean()
     .default(false)
     .describe("Keep each package's distributions in its own output directory"),
-  dryRun: TaskDryRunOptionSchema,
+  dryRun: z.boolean().default(false).describe("Validate artifacts without publishing them"),
 });
 
 /** Parse task options and build or publish Python workspace distributions. */

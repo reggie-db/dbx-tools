@@ -24,6 +24,38 @@ function project(outdir: string): DBXToolsNodeProject {
 }
 
 describe("VS Code settings", () => {
+  it("starts native Projen watch when the folder opens", () => {
+    const outdir = mkdtempSync(join(tmpdir(), "dbx-tools-vscode-"));
+    temporaryDirectories.push(outdir);
+    project(outdir).synth();
+
+    const tasks = JSON.parse(readFileSync(join(outdir, ".vscode/tasks.json"), "utf8")) as {
+      tasks: Array<{
+        label: string;
+        command: string;
+        isBackground?: boolean;
+        runOptions?: { runOn?: string };
+      }>;
+    };
+    assert.deepEqual(
+      tasks.tasks.find(({ label }) => label === "sync"),
+      {
+        label: "sync",
+        detail: "projen --watch - automatically resynthesize generated files and barrels",
+        type: "shell",
+        command: "bun run sync -- --watch",
+        isBackground: true,
+        problemMatcher: [],
+        runOptions: { runOn: "folderOpen" },
+        presentation: {
+          reveal: "always",
+          panel: "dedicated",
+          group: "projen",
+        },
+      },
+    );
+  });
+
   it("emits writable settings", () => {
     const outdir = mkdtempSync(join(tmpdir(), "dbx-tools-vscode-"));
     temporaryDirectories.push(outdir);

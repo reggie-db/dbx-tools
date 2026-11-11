@@ -39,7 +39,6 @@
     "@dbx-tools/path": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:",
-    "concurrently": "catalog:",
     "constructs": "^10.6.0",
     "is-identifier": "^1",
     "node-stdlib-browser": "^1.3.1",

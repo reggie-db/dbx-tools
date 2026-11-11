@@ -76,7 +76,7 @@ export interface ResolvedPythonNodeBindings {
   readonly projectDirectory: string;
   readonly pyproject: string;
   readonly runtimeOutput: string;
-  readonly watchInputs: readonly string[];
+  readonly sourceInputs: readonly string[];
   readonly workspaceDirectories: readonly string[];
 }
 
@@ -176,7 +176,7 @@ export function pythonNodeBindingInputFingerprint(
   const sourceDirectory = dirname(sourceFile);
   const files = new Set<string>([
     sourceFile,
-    canonicalPath(resolve(sourceDirectory, "../tasks/python-node-bindings.ts")),
+    canonicalPath(join(sourceDirectory, "_python-node-bindings-generator.ts")),
     canonicalPath(join(sourceDirectory, "generated.ts")),
     canonicalPath(join(sourceDirectory, "module-exports.ts")),
     canonicalPath(join(sourceDirectory, "packages.ts")),
@@ -185,7 +185,7 @@ export function pythonNodeBindingInputFingerprint(
   const versionFile = join(root, "VERSION");
   if (existsSync(versionFile)) files.add(canonicalPath(versionFile));
   for (const config of configs) {
-    for (const input of config.watchInputs) files.add(canonicalPath(resolve(root, input)));
+    for (const input of config.sourceInputs) files.add(canonicalPath(resolve(root, input)));
     for (const { handlerFile } of config.functionOverrides) files.add(canonicalPath(handlerFile));
     const packageEntrypoint = canonicalPath(
       resolveModule(config.entrypoint, config.projectDirectory),
@@ -435,14 +435,14 @@ export function resolvePythonNodeBindings(
     };
     return {
       ...resolved,
-      watchInputs: bindingSourceInputs(root, resolved),
+      sourceInputs: bindingSourceInputs(root, resolved),
     };
   });
   validateBindings(configs);
   return configs;
 }
 
-type BindingSourceConfig = Omit<ResolvedPythonNodeBindings, "watchInputs">;
+type BindingSourceConfig = Omit<ResolvedPythonNodeBindings, "sourceInputs">;
 
 /** Transitive workspace source files reachable from configured binding modules. */
 function bindingSourceInputs(root: string, config: BindingSourceConfig): string[] {
@@ -520,47 +520,6 @@ function canonicalPath(path: string): string {
       candidate = parent;
     }
   }
-}
-
-/** All paths that can change a workspace-backed generated Node runtime. */
-export function pythonNodeBindingWatchInputs(config: ResolvedPythonNodeBindings): string[] {
-  if (config.workspaceDirectories.length === 0) {
-    throw new Error(`${config.package} is not a workspace package and cannot be watched`);
-  }
-  return [
-    config.pyproject,
-    ...config.watchInputs,
-    ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
-  ];
-}
-
-/**
- * Python projects whose generated runtimes depend on at least one changed path.
- *
- * The project list is computed once per watch batch and reused by the lock preflight
- * and generator callback. This keeps unrelated edits on the no-lock fast path while
- * ensuring each affected Python project is regenerated only once.
- */
-export function affectedPythonNodeBindingProjects(
-  root: string,
-  configs: readonly ResolvedPythonNodeBindings[],
-  changed: readonly string[],
-): string[] {
-  const affected = new Set<string>();
-  for (const config of configs) {
-    const inputs = pythonNodeBindingWatchInputs(config);
-    if (
-      changed.some((candidate) =>
-        inputs.some(
-          (input) =>
-            relativePathWithin(resolve(root, input), resolve(root, candidate)) !== undefined,
-        ),
-      )
-    ) {
-      affected.add(config.project);
-    }
-  }
-  return [...affected].sort();
 }
 
 function validateBindings(configs: readonly ResolvedPythonNodeBindings[]): void {

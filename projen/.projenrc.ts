@@ -76,10 +76,6 @@ const project = new typescript.TypeScriptProject({
     "@dbx-tools/path@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
     "commander@catalog:",
-    // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
-    // because the repo root happens to depend on it; a consumer install has no
-    // such luck and `sync --watch` dies on a missing module.
-    "concurrently@catalog:",
     "constructs@^10.6.0",
     "is-identifier@^1",
     "node-stdlib-browser@^1.3.1",

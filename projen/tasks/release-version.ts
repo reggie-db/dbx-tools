@@ -3,17 +3,18 @@
 import { resolve } from "node:path";
 import { projectUtils } from "@dbx-tools/core";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
-import { TaskRootOptionSchema } from "./options.ts";
+import { runTaskMain } from "./cli.ts";
 import { captureTaskCommand } from "../src/_task-command.ts";
 import { compareSemver, parseSemver, type Semver } from "../src/workspace-version.ts";
 
-export const ReleaseVersionOptionsSchema = z.object({
-  version: z.string().trim().min(1).describe("Release version to validate"),
-  root: TaskRootOptionSchema,
-  prefix: z.array(z.string().trim().min(1)).default([]).describe("Allowed release tag prefix"),
-  assertNext: z.boolean().default(false).describe("Require a version newer than published tags"),
-});
+export const ReleaseVersionOptionsSchema = z
+  .object({
+    version: z.string().trim().min(1).describe("Release version to validate"),
+    root: z.string().trim().min(1).optional().describe("Repository or workspace root"),
+    prefix: z.array(z.string().trim().min(1)).default([]).describe("Allowed release tag prefix"),
+    assertNext: z.boolean().default(false).describe("Require a version newer than published tags"),
+  })
+  .describe("Validate a stable workspace release version");
 
 function publishedVersion(root: string, prefixes: readonly string[]): string | undefined {
   let best: Semver | undefined;
@@ -55,21 +56,10 @@ export function assertReleaseVersion(
   }
 }
 
-export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const values = await taskOptions(
-    taskCommand(
-      import.meta.url,
-      "Validate a stable workspace release version",
-      ReleaseVersionOptionsSchema,
-    ),
-    ReleaseVersionOptionsSchema,
-    args,
-  );
+export const main = await runTaskMain(import.meta, ReleaseVersionOptionsSchema, (values) => {
   assertReleaseVersion(values.version, {
     ...(values.root ? { root: values.root } : {}),
     ...(values.prefix.length ? { prefixes: values.prefix } : {}),
     assertNext: values.assertNext,
   });
-}
-
-await runTaskMain(import.meta, main);
+});

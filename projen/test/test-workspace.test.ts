@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { workspaceGraph } from "../tasks/test-workspace.ts";
+import { workspaceGraph } from "../src/workspace-validation.ts";
 
 const fixtures: string[] = [];
 
@@ -95,7 +95,7 @@ it("skips unreadable recorded manifests without changing valid graph edges", () 
   });
 });
 
-for (const mode of ["all", "unit", "changed"]) {
+for (const mode of ["changed"]) {
   it(`runs JavaScript documentation tests in ${mode} mode and skips dependency tests`, () => {
     const root = fixture();
     mkdirSync(join(root, ".projen"));
@@ -120,36 +120,34 @@ for (const mode of ["all", "unit", "changed"]) {
       join(root, "docs/scripts/node_modules/dependency/example.test.ts"),
       'throw new Error("dependency tests must not run");\n',
     );
-    if (mode === "changed") {
-      const init = spawnSync("git", ["init", "--quiet"], { cwd: root, encoding: "utf8" });
-      assert.equal(init.status, 0, init.stderr);
-      const add = spawnSync("git", ["add", "package.json", "docs/scripts/example.test.mjs"], {
-        cwd: root,
-        encoding: "utf8",
-      });
-      assert.equal(add.status, 0, add.stderr);
-      const commit = spawnSync(
-        "git",
-        [
-          "-c",
-          "user.name=Fixture",
-          "-c",
-          "user.email=fixture@example.com",
-          "commit",
-          "--quiet",
-          "-m",
-          "fixture",
-        ],
-        { cwd: root, encoding: "utf8" },
-      );
-      assert.equal(commit.status, 0, commit.stderr);
-      writeFileSync(join(root, "docs/scripts/helper.mjs"), "export const changed = true;\n");
-      const stage = spawnSync("git", ["add", "docs/scripts/helper.mjs"], {
-        cwd: root,
-        encoding: "utf8",
-      });
-      assert.equal(stage.status, 0, stage.stderr);
-    }
+    const init = spawnSync("git", ["init", "--quiet"], { cwd: root, encoding: "utf8" });
+    assert.equal(init.status, 0, init.stderr);
+    const add = spawnSync("git", ["add", "package.json", "docs/scripts/example.test.mjs"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    assert.equal(add.status, 0, add.stderr);
+    const commit = spawnSync(
+      "git",
+      [
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.com",
+        "commit",
+        "--quiet",
+        "-m",
+        "fixture",
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(commit.status, 0, commit.stderr);
+    writeFileSync(join(root, "docs/scripts/helper.mjs"), "export const changed = true;\n");
+    const stage = spawnSync("git", ["add", "docs/scripts/helper.mjs"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    assert.equal(stage.status, 0, stage.stderr);
     const result = spawnSync(
       process.execPath,
       [fileURLToPath(new URL("../tasks/test-workspace.ts", import.meta.url)), mode, "--root", root],

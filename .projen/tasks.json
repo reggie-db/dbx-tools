@@ -171,9 +171,173 @@
       "steps": [
         {
           "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"
+            "bunx",
+            "tsc",
+            "--build",
+            "tsconfig.json",
+            "packages/js/cli/args/tsconfig.json",
+            "packages/js/cli/dbx-tools/tsconfig.json",
+            "packages/js/cli/service/tsconfig.json",
+            "packages/js/node/appkit/tsconfig.json",
+            "packages/js/node/appkit-generator/tsconfig.json",
+            "packages/js/node/appkit-lakebox/tsconfig.json",
+            "packages/js/node/appkit-mastra/tsconfig.json",
+            "packages/js/node/appkit-memory/tsconfig.json",
+            "packages/js/node/appkit-web-search/tsconfig.json",
+            "packages/js/node/auth/tsconfig.json",
+            "packages/js/node/auth-gate/tsconfig.json",
+            "packages/js/node/cache/tsconfig.json",
+            "packages/js/node/core/tsconfig.json",
+            "packages/js/node/databricks/tsconfig.json",
+            "packages/js/node/databricks-zerobus/tsconfig.json",
+            "packages/js/node/email/tsconfig.json",
+            "packages/js/node/fs/tsconfig.json",
+            "packages/js/node/genie/tsconfig.json",
+            "packages/js/node/lakebase/tsconfig.json",
+            "packages/js/node/lakebox/tsconfig.json",
+            "packages/js/node/model/tsconfig.json",
+            "packages/js/node/model-protocol/tsconfig.json",
+            "packages/js/node/path/tsconfig.json",
+            "packages/js/node/postgres/tsconfig.json",
+            "packages/js/node/search/tsconfig.json",
+            "packages/js/shared/appkit/tsconfig.json",
+            "packages/js/shared/auth/tsconfig.json",
+            "packages/js/shared/core/tsconfig.json",
+            "packages/js/shared/email/tsconfig.json",
+            "packages/js/shared/email-template/tsconfig.json",
+            "packages/js/shared/fs/tsconfig.json",
+            "packages/js/shared/generator/tsconfig.json",
+            "packages/js/shared/genie/tsconfig.json",
+            "packages/js/shared/genie-code/tsconfig.json",
+            "packages/js/shared/graphiti/tsconfig.json",
+            "packages/js/shared/lakebox/tsconfig.json",
+            "packages/js/shared/mastra/tsconfig.json",
+            "packages/js/shared/model/tsconfig.json",
+            "packages/js/shared/model-gateway/tsconfig.json",
+            "packages/js/shared/search/tsconfig.json",
+            "packages/js/ui/lakebox/tsconfig.json",
+            "packages/js/ui/mastra/tsconfig.json"
           ]
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "pre-compile"
+          ],
+          "cwd": "packages/demo"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "compile"
+          ],
+          "cwd": "packages/demo"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "post-compile"
+          ],
+          "cwd": "packages/demo"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "pre-compile"
+          ],
+          "cwd": "packages/js/node/appkit-model-gateway"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "compile"
+          ],
+          "cwd": "packages/js/node/appkit-model-gateway"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "post-compile"
+          ],
+          "cwd": "packages/js/node/appkit-model-gateway"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "pre-compile"
+          ],
+          "cwd": "packages/js/node/tunnel"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "compile"
+          ],
+          "cwd": "packages/js/node/tunnel"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "post-compile"
+          ],
+          "cwd": "packages/js/node/tunnel"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "pre-compile"
+          ],
+          "cwd": "packages/js/ui/appkit"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "compile"
+          ],
+          "cwd": "packages/js/ui/appkit"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "post-compile"
+          ],
+          "cwd": "packages/js/ui/appkit"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "pre-compile"
+          ],
+          "cwd": "projen"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "compile"
+          ],
+          "cwd": "projen"
+        },
+        {
+          "execArgs": [
+            "bun",
+            "run",
+            "post-compile"
+          ],
+          "cwd": "projen"
         }
       ]
     },
@@ -562,18 +726,6 @@
         }
       ]
     },
-    "python-node-bindings:watch": {
-      "name": "python-node-bindings:watch",
-      "description": "Watch and regenerate affected Python Node bindings",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts"
-          ]
-        }
-      ]
-    },
     "python-node-runtime": {
       "name": "python-node-runtime",
       "description": "Build the shared PythonMonkey Node runtime",
@@ -595,20 +747,6 @@
             "bun",
             "packages/py/node-runtime/build-runtime.ts",
             "--check"
-          ]
-        }
-      ]
-    },
-    "python-node-runtime:watch": {
-      "name": "python-node-runtime:watch",
-      "description": "Watch and rebuild the shared PythonMonkey Node runtime",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-runtime-watch.ts",
-            "--project",
-            "packages/py/node-runtime"
           ]
         }
       ]
@@ -673,12 +811,10 @@
     },
     "sync": {
       "name": "sync",
+      "description": "Synthesize project files once or continuously with --watch",
       "steps": [
         {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/sync.ts"
-          ],
+          "exec": "bunx projen",
           "receiveArgs": true
         }
       ]
@@ -712,11 +848,10 @@
       "description": "Run all JavaScript, TypeScript, and Python tests",
       "steps": [
         {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
-            "all"
-          ]
+          "spawn": "test:unit"
+        },
+        {
+          "spawn": "test:integration"
         },
         {
           "spawn": "py:test"
@@ -758,8 +893,24 @@
         {
           "execArgs": [
             "bun",
-            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
-            "integration"
+            "test",
+            "projen/test/local-publish.test.ts",
+            "projen/test/npm-release.test.ts",
+            "projen/test/packed-consumer.test.ts",
+            "projen/test/project-py.test.ts",
+            "projen/test/publish-task.test.ts",
+            "projen/test/publish.test.ts",
+            "projen/test/python-publish.test.ts",
+            "projen/test/python-sync.test.ts",
+            "projen/test/release-artifacts.test.ts",
+            "projen/test/release-command.test.ts",
+            "projen/test/release-notes.test.ts",
+            "projen/test/release-options.test.ts",
+            "projen/test/release.test.ts",
+            "projen/test/root-install.test.ts",
+            "projen/test/sdk-boundary.test.ts",
+            "packages/js/node/tunnel/test/frp-install.integration.test.ts",
+            "packages/js/node/tunnel/test/portr-install.integration.test.ts"
           ]
         }
       ]
@@ -771,8 +922,323 @@
         {
           "execArgs": [
             "bun",
-            "node_modules/@dbx-tools/projen/tasks/test-workspace.ts",
-            "unit"
+            "test",
+            "packages/js/node/appkit/test/auto-configure.test.ts",
+            "packages/js/node/appkit/test/cache-storage.test.ts",
+            "packages/js/node/appkit/test/databricks.test.ts",
+            "packages/js/node/appkit/test/debug-capture.test.ts",
+            "packages/js/node/appkit/test/files-cache.test.ts",
+            "packages/js/node/appkit/test/identity.test.ts",
+            "packages/js/node/appkit/test/interceptor.test.ts",
+            "packages/js/node/appkit/test/lakebase-resolver.test.ts",
+            "packages/js/node/appkit/test/native-lifecycle.test.ts",
+            "packages/js/node/appkit/test/openapi-tool.test.ts",
+            "packages/js/node/appkit/test/plugin-registry.test.ts",
+            "packages/js/node/appkit/test/provision.test.ts",
+            "packages/js/node/appkit/test/request-tags.test.ts",
+            "packages/js/node/appkit/test/telemetry.test.ts",
+            "packages/js/node/appkit/test/tool-operations.test.ts",
+            "packages/js/node/appkit/test/toolkit-entries.test.ts",
+            "packages/js/node/appkit-generator/test/assets.test.ts",
+            "packages/js/node/appkit-generator/test/brand-history.test.ts",
+            "packages/js/node/appkit-generator/test/data.test.ts",
+            "packages/js/node/appkit-generator/test/generate.test.ts",
+            "packages/js/node/appkit-generator/test/namespace-provision.test.ts",
+            "packages/js/node/appkit-generator/test/palette.test.ts",
+            "packages/js/node/appkit-generator/test/presentation.test.ts",
+            "packages/js/node/appkit-generator/test/workflow.test.ts",
+            "packages/js/node/appkit-lakebox/test/lakebox-service.test.ts",
+            "packages/js/node/appkit-lakebox/test/metrics.test.ts",
+            "packages/js/node/appkit-lakebox/test/resource-registry.test.ts",
+            "packages/js/node/appkit-lakebox/test/routes.test.ts",
+            "packages/js/node/appkit-lakebox/test/runtime.test.ts",
+            "packages/js/node/appkit-lakebox/test/service-snapshots.test.ts",
+            "packages/js/node/appkit-lakebox/test/services.test.ts",
+            "packages/js/node/appkit-lakebox/test/skills.test.ts",
+            "packages/js/node/appkit-lakebox/test/user.test.ts",
+            "packages/js/node/appkit-mastra/test/attribution.test.ts",
+            "packages/js/node/appkit-mastra/test/chart.test.ts",
+            "packages/js/node/appkit-mastra/test/chat.test.ts",
+            "packages/js/node/appkit-mastra/test/config.test.ts",
+            "packages/js/node/appkit-mastra/test/eval.test.ts",
+            "packages/js/node/appkit-mastra/test/feedback-mode.test.ts",
+            "packages/js/node/appkit-mastra/test/filesystems.test.ts",
+            "packages/js/node/appkit-mastra/test/follow-up-suggestions.test.ts",
+            "packages/js/node/appkit-mastra/test/genie-chat.test.ts",
+            "packages/js/node/appkit-mastra/test/genie-visualization-route.test.ts",
+            "packages/js/node/appkit-mastra/test/genie.test.ts",
+            "packages/js/node/appkit-mastra/test/identity.test.ts",
+            "packages/js/node/appkit-mastra/test/lifecycle.test.ts",
+            "packages/js/node/appkit-mastra/test/memory.test.ts",
+            "packages/js/node/appkit-mastra/test/mlflow.test.ts",
+            "packages/js/node/appkit-mastra/test/model-usage.test.ts",
+            "packages/js/node/appkit-mastra/test/model.test.ts",
+            "packages/js/node/appkit-mastra/test/monty-sandbox.test.ts",
+            "packages/js/node/appkit-mastra/test/output-processor-extension.test.ts",
+            "packages/js/node/appkit-mastra/test/package.test.ts",
+            "packages/js/node/appkit-mastra/test/processors.test.ts",
+            "packages/js/node/appkit-mastra/test/remote-skills.test.ts",
+            "packages/js/node/appkit-mastra/test/server-context.test.ts",
+            "packages/js/node/appkit-mastra/test/statement.test.ts",
+            "packages/js/node/appkit-mastra/test/telemetry.test.ts",
+            "packages/js/node/appkit-mastra/test/toolkit.test.ts",
+            "packages/js/node/appkit-mastra/test/trace-topology.test.ts",
+            "packages/js/node/appkit-mastra/test/workflow-registration.test.ts",
+            "packages/js/node/appkit-mastra/test/workspaces.test.ts",
+            "packages/js/node/appkit-memory/test/config.test.ts",
+            "packages/js/node/appkit-memory/test/databricks.test.ts",
+            "packages/js/node/appkit-memory/test/mastra.test.ts",
+            "packages/js/node/appkit-memory/test/plugin.test.ts",
+            "packages/js/node/appkit-memory/test/runtime.test.ts",
+            "packages/js/node/appkit-model-gateway/test/ai-decide.test.ts",
+            "packages/js/node/appkit-model-gateway/test/gateway.test.ts",
+            "packages/js/node/appkit-model-gateway/test/model-context.test.ts",
+            "packages/js/node/appkit-model-gateway/test/models.test.ts",
+            "packages/js/node/appkit-model-gateway/test/plugin.test.ts",
+            "packages/js/node/appkit-model-gateway/test/profile-fallback.test.ts",
+            "packages/js/node/appkit-model-gateway/test/reasoning-adapt.test.ts",
+            "packages/js/node/appkit-model-gateway/test/registry.test.ts",
+            "packages/js/node/appkit-model-gateway/test/router.test.ts",
+            "packages/js/node/appkit-model-gateway/test/routes.test.ts",
+            "packages/js/node/appkit-model-gateway/test/smart-router.test.ts",
+            "packages/js/node/appkit-model-gateway/test/transport.test.ts",
+            "packages/js/node/appkit-web-search/test/allowlist.test.ts",
+            "packages/js/node/appkit-web-search/test/html-text.test.ts",
+            "packages/js/node/appkit-web-search/test/native-agent.test.ts",
+            "packages/js/node/appkit-web-search/test/runtime.test.ts",
+            "packages/js/node/appkit-web-search/test/search.test.ts",
+            "packages/js/node/auth/test/bindings.test.ts",
+            "packages/js/node/auth/test/contracts.test.ts",
+            "packages/js/node/auth/test/databricks-auth.test.ts",
+            "packages/js/node/auth/test/databricks-cli.test.ts",
+            "packages/js/node/auth/test/lifecycle.test.ts",
+            "packages/js/node/auth/test/logging.test.ts",
+            "packages/js/node/auth/test/profile.test.ts",
+            "packages/js/node/auth/test/runtime-auth.test.ts",
+            "packages/js/node/auth-gate/test/auth.test.ts",
+            "packages/js/node/cache/test/cache.test.ts",
+            "packages/js/cli/dbx-tools/test/appkit-options.test.ts",
+            "packages/js/cli/dbx-tools/test/auth-cli.test.ts",
+            "packages/js/cli/dbx-tools/test/brand.test.ts",
+            "packages/js/cli/dbx-tools/test/bun.test.ts",
+            "packages/js/cli/dbx-tools/test/cli-main.test.ts",
+            "packages/js/cli/dbx-tools/test/genie-code-cli.test.ts",
+            "packages/js/cli/dbx-tools/test/genie-code-config.test.ts",
+            "packages/js/cli/dbx-tools/test/genie-code-install.test.ts",
+            "packages/js/cli/dbx-tools/test/genie-code-runtime.test.ts",
+            "packages/js/cli/dbx-tools/test/graphiti-cli.test.ts",
+            "packages/js/cli/dbx-tools/test/lakebase-proxy-cancellation.test.ts",
+            "packages/js/cli/dbx-tools/test/lakebase-proxy-cli.test.ts",
+            "packages/js/cli/dbx-tools/test/lakebase-proxy-protocol.test.ts",
+            "packages/js/cli/dbx-tools/test/lakebase-proxy-proxy.test.ts",
+            "packages/js/cli/dbx-tools/test/model-gateway-cli.test.ts",
+            "packages/js/cli/dbx-tools/test/model-gateway-server.test.ts",
+            "packages/js/cli/dbx-tools/test/root.test.ts",
+            "packages/js/cli/dbx-tools/test/runtime-commands.test.ts",
+            "packages/js/cli/dbx-tools/test/runtime-dependencies.test.ts",
+            "packages/js/cli/dbx-tools/test/service-auth.test.ts",
+            "packages/js/cli/dbx-tools/test/tunnel-app.test.ts",
+            "packages/js/cli/dbx-tools/test/tunnel-options.test.ts",
+            "packages/js/cli/args/test/args.test.ts",
+            "packages/js/cli/service/test/cli.test.ts",
+            "packages/js/cli/service/test/compile.test.ts",
+            "packages/js/cli/service/test/control.test.ts",
+            "packages/js/cli/service/test/definition.test.ts",
+            "packages/js/cli/service/test/host.test.ts",
+            "packages/js/cli/service/test/icon.test.ts",
+            "packages/js/cli/service/test/package.test.ts",
+            "packages/js/cli/service/test/runtime.test.ts",
+            "packages/js/cli/service/test/service.test.ts",
+            "packages/js/cli/service/test/startup.test.ts",
+            "packages/js/node/core/test/bin.test.ts",
+            "packages/js/node/core/test/brand-files.test.ts",
+            "packages/js/node/core/test/bundle.test.ts",
+            "packages/js/node/core/test/config-utils.test.ts",
+            "packages/js/node/core/test/dependency-resolver.test.ts",
+            "packages/js/node/core/test/exec.test.ts",
+            "packages/js/node/core/test/file-lock.test.ts",
+            "packages/js/node/core/test/file.test.ts",
+            "packages/js/node/core/test/process-lock.test.ts",
+            "packages/js/node/core/test/project-utils.test.ts",
+            "packages/js/node/databricks/test/databricks-fs.test.ts",
+            "packages/js/node/databricks/test/databricks-path.test.ts",
+            "packages/js/node/databricks/test/workspace-client.test.ts",
+            "packages/js/node/email/test/brand.test.ts",
+            "packages/js/node/email/test/config.test.ts",
+            "packages/js/node/email/test/executor.test.ts",
+            "packages/js/node/email/test/sender.test.ts",
+            "packages/js/node/email/test/tool.test.ts",
+            "packages/js/node/email/test/transport.test.ts",
+            "packages/js/node/fs/test/local-fs.test.ts",
+            "packages/js/node/fs/test/local-path.test.ts",
+            "packages/js/node/fs/test/os-path.test.ts",
+            "packages/js/node/genie/test/chat.test.ts",
+            "packages/js/node/genie/test/feedback.test.ts",
+            "packages/js/node/genie/test/space.test.ts",
+            "packages/js/node/genie/test/visualization.test.ts",
+            "packages/js/node/lakebase/test/address.test.ts",
+            "packages/js/node/lakebase/test/client.test.ts",
+            "packages/js/node/lakebox/test/_ssh.test.ts",
+            "packages/js/node/lakebox/test/key-store.test.ts",
+            "packages/js/node/lakebox/test/rest.test.ts",
+            "packages/js/node/lakebox/test/session.test.ts",
+            "packages/js/node/model/test/bindings.test.ts",
+            "packages/js/node/model/test/classes.test.ts",
+            "packages/js/node/model/test/invoke.test.ts",
+            "packages/js/node/model/test/metadata-cache.test.ts",
+            "packages/js/node/model/test/metadata-contract.test.ts",
+            "packages/js/node/model/test/metadata.test.ts",
+            "packages/js/node/model/test/model-client.test.ts",
+            "packages/js/node/model/test/policy.test.ts",
+            "packages/js/node/model/test/reasoning-translation.test.ts",
+            "packages/js/node/model/test/resolve.test.ts",
+            "packages/js/node/model-protocol/test/gateway-decode.test.ts",
+            "packages/js/node/model-protocol/test/gateway-encode.test.ts",
+            "packages/js/node/model-protocol/test/provider.test.ts",
+            "packages/js/node/model-protocol/test/serving-wire.test.ts",
+            "packages/js/node/path/test/git-ignore.test.ts",
+            "packages/js/node/path/test/match-parity.test.ts",
+            "packages/js/node/postgres/test/advisory-lock.test.ts",
+            "packages/js/node/postgres/test/persistence.test.ts",
+            "packages/js/node/postgres/test/session.test.ts",
+            "packages/js/node/postgres/test/topic-bus.test.ts",
+            "projen/test/appkit-deploy.test.ts",
+            "projen/test/appkit-workspace.test.ts",
+            "projen/test/apply-to-projects.test.ts",
+            "projen/test/barrels.test.ts",
+            "projen/test/bun-app.test.ts",
+            "projen/test/bun-lockfile.test.ts",
+            "projen/test/child-gitignore.test.ts",
+            "projen/test/codegen-eslint.test.ts",
+            "projen/test/dev-watch.test.ts",
+            "projen/test/error-logging.test.ts",
+            "projen/test/external-project.test.ts",
+            "projen/test/module-exports.test.ts",
+            "projen/test/optional-peer.test.ts",
+            "projen/test/package-metadata.test.ts",
+            "projen/test/packages.test.ts",
+            "projen/test/pnpm-workspace.test.ts",
+            "projen/test/project-js.test.ts",
+            "projen/test/python-node-bindings-generator.test.ts",
+            "projen/test/python-node-bindings.test.ts",
+            "projen/test/python-registry.test.ts",
+            "projen/test/shared-boundary.test.ts",
+            "projen/test/shared-core-usage.test.ts",
+            "projen/test/task-cli.test.ts",
+            "projen/test/task-command.test.ts",
+            "projen/test/tasks.test.ts",
+            "projen/test/test-workspace.test.ts",
+            "projen/test/tsconfig-jsx.test.ts",
+            "projen/test/ui-peer.test.ts",
+            "projen/test/verify-publications.test.ts",
+            "projen/test/vscode.test.ts",
+            "projen/test/workspace-manifest.test.ts",
+            "projen/test/workspace-vendor.test.ts",
+            "projen/test/workspace-version.test.ts",
+            "packages/js/node/search/test/index-options.test.ts",
+            "packages/js/node/search/test/lakebase-plugin.test.ts",
+            "packages/js/node/search/test/lakebase.test.ts",
+            "packages/js/node/search/test/lifecycle.test.ts",
+            "packages/js/node/search/test/native.test.ts",
+            "packages/js/node/search/test/query.test.ts",
+            "packages/js/node/search/test/runtime.test.ts",
+            "packages/js/shared/appkit/test/debug-capture.test.ts",
+            "packages/js/shared/auth/test/auth.test.ts",
+            "packages/js/shared/auth/test/databricks.test.ts",
+            "packages/js/shared/core/test/async-utils.test.ts",
+            "packages/js/shared/core/test/brand-utils.test.ts",
+            "packages/js/shared/core/test/environment-utils.test.ts",
+            "packages/js/shared/core/test/execution.test.ts",
+            "packages/js/shared/core/test/hash.test.ts",
+            "packages/js/shared/core/test/json.test.ts",
+            "packages/js/shared/core/test/log.test.ts",
+            "packages/js/shared/core/test/object.test.ts",
+            "packages/js/shared/core/test/options.test.ts",
+            "packages/js/shared/core/test/pattern.test.ts",
+            "packages/js/shared/core/test/string-utils.test.ts",
+            "packages/js/shared/email-template/test/template.test.ts",
+            "packages/js/shared/fs/test/cache.test.ts",
+            "packages/js/shared/fs/test/error.test.ts",
+            "packages/js/shared/fs/test/memory-fs.test.ts",
+            "packages/js/shared/fs/test/posix-path.test.ts",
+            "packages/js/shared/fs/test/root.test.ts",
+            "packages/js/shared/generator/test/brand.test.ts",
+            "packages/js/shared/generator/test/workflow.test.ts",
+            "packages/js/shared/genie/test/agent-mode.test.ts",
+            "packages/js/shared/genie/test/event.test.ts",
+            "packages/js/shared/genie/test/genie-model.test.ts",
+            "packages/js/shared/genie-code/test/options.test.ts",
+            "packages/js/shared/graphiti/test/options.test.ts",
+            "packages/js/shared/lakebox/test/schemas.test.ts",
+            "packages/js/shared/mastra/test/feedback.test.ts",
+            "packages/js/shared/mastra/test/follow-up.test.ts",
+            "packages/js/shared/mastra/test/genie-visualization.test.ts",
+            "packages/js/shared/mastra/test/resume.test.ts",
+            "packages/js/shared/mastra/test/wire.test.ts",
+            "packages/js/shared/model/test/contracts.test.ts",
+            "packages/js/shared/model/test/display.test.ts",
+            "packages/js/shared/model/test/openai-chat.test.ts",
+            "packages/js/shared/model-gateway/test/client.test.ts",
+            "packages/js/shared/model-gateway/test/contracts.test.ts",
+            "packages/js/shared/model-gateway/test/options.test.ts",
+            "packages/js/shared/model-gateway/test/upstream.test.ts",
+            "packages/js/shared/search/test/routes.test.ts",
+            "packages/js/node/tunnel/test/frp.test.ts",
+            "packages/js/node/tunnel/test/gate-middleware.test.ts",
+            "packages/js/node/tunnel/test/gate.test.ts",
+            "packages/js/node/tunnel/test/headers.test.ts",
+            "packages/js/node/tunnel/test/interceptor.test.ts",
+            "packages/js/node/tunnel/test/node-adapter.test.ts",
+            "packages/js/node/tunnel/test/path-proxy.test.ts",
+            "packages/js/node/tunnel/test/portr.test.ts",
+            "packages/js/node/tunnel/test/request-context.test.ts",
+            "packages/js/node/tunnel/test/supervisor.test.ts",
+            "packages/js/ui/appkit/test/branding-css.test.ts",
+            "packages/js/ui/appkit/test/email-preview.test.ts",
+            "packages/js/ui/appkit/test/record-preview.test.ts",
+            "packages/js/ui/appkit/test/search-use-search.test.ts",
+            "packages/js/ui/lakebox/test/client.test.ts",
+            "packages/js/ui/lakebox/test/service-url.test.ts",
+            "packages/js/ui/mastra/test/active-runs.test.ts",
+            "packages/js/ui/mastra/test/assistant-activity.test.ts",
+            "packages/js/ui/mastra/test/assistant-response-status.test.ts",
+            "packages/js/ui/mastra/test/browser-transcript.test.ts",
+            "packages/js/ui/mastra/test/chart-option.test.ts",
+            "packages/js/ui/mastra/test/chat-approvals.test.ts",
+            "packages/js/ui/mastra/test/chat-feedback.test.ts",
+            "packages/js/ui/mastra/test/chat-stream.test.ts",
+            "packages/js/ui/mastra/test/chat-thread-layout.test.ts",
+            "packages/js/ui/mastra/test/chat-transcript-follow.test.ts",
+            "packages/js/ui/mastra/test/composer-autosize.test.ts",
+            "packages/js/ui/mastra/test/external-link-dialog.test.ts",
+            "packages/js/ui/mastra/test/genie-client.test.ts",
+            "packages/js/ui/mastra/test/genie-image.test.ts",
+            "packages/js/ui/mastra/test/history-messages.test.ts",
+            "packages/js/ui/mastra/test/image-attachments.test.ts",
+            "packages/js/ui/mastra/test/markdown.test.ts",
+            "packages/js/ui/mastra/test/mastra-client.test.ts",
+            "packages/js/ui/mastra/test/message-text.test.ts",
+            "packages/js/ui/mastra/test/model-selection.test.ts",
+            "packages/js/ui/mastra/test/request-context.test.ts",
+            "packages/js/ui/mastra/test/selected-model-pill.test.ts",
+            "packages/js/ui/mastra/test/suggestions.test.ts",
+            "packages/js/ui/mastra/test/thoughts-disclosure.test.ts",
+            "packages/js/ui/mastra/test/thread-persistence.test.ts",
+            "packages/js/ui/mastra/test/thread-sessions.test.ts",
+            "packages/js/ui/mastra/test/thread-tabs.test.ts",
+            "packages/js/ui/mastra/test/tool-events.test.ts",
+            "packages/js/ui/mastra/test/tool-pill.test.ts",
+            "test/workspace-dependency-policy.test.ts",
+            "scripts/demo-deploy.test.ts",
+            "scripts/run-demo.test.ts",
+            "docs/scripts/api-guide-links.test.mjs",
+            "docs/scripts/check-generated-links.test.mjs",
+            "docs/scripts/check-source-docs.test.mjs",
+            "docs/scripts/cli-reference.test.mjs",
+            "docs/scripts/docs-toolchain.test.mjs",
+            "docs/scripts/package-exports.test.mjs",
+            "docs/scripts/repository-docs.test.mjs",
+            "docs/scripts/zod-docs.test.mjs"
           ]
         }
       ]

@@ -220,9 +220,6 @@ const root = new projectJs.DBXToolsNodeProject({
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
-  // This root consumes the workspace-local engine source, so generator edits
-  // must resynthesize the product tree just like root configuration changes.
-  syncResynthPaths: ["branding/brand.yaml", "branding/assets", "projen/src"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
   // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
   // by source path either way.
@@ -235,7 +232,6 @@ const root = new projectJs.DBXToolsNodeProject({
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/projen@workspace:*",
     "commander@catalog:",
-    "concurrently@catalog:",
     "marked@catalog:",
     "whatwg-url@14.2.0",
     "yaml@catalog:",

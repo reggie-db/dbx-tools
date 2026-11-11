@@ -21,7 +21,7 @@ rootProject.synth();
 The project discovers every `src`-bearing folder under the configured roots and
 applies defaults for shared libraries, Node packages, CLIs, servers, and React
 packages. It can also generate Zod schemas from declarations and coordinate
-generated-file cleanup and watch tasks.
+generated-file cleanup and development tasks.
 
 Every `src`-bearing folder under the configured roots becomes a
 `DBXToolsTypeScriptProject`. `packages/js` is selected automatically when it
@@ -215,24 +215,21 @@ The workspace creates one repository-wide binding lifecycle:
 - `python-node-bindings` generates every configured bridge.
 - `python-node-bindings:check` verifies generated files and fails on stale
   `_generated/node` directories.
-- `python-node-bindings:watch` watches only configured module entrypoints and
-  their transitive workspace source imports. Tests, compiled output, generated
-  bindings, and unrelated modules do not trigger regeneration or acquire the
-  workspace mutation lock. Binding-manifest and generator changes regenerate
-  the affected projects and restart the watcher when its input graph changes.
+
+The build lifecycle runs generation during `pre-compile`, and the test lifecycle
+runs the freshness check. Full synthesis also regenerates every binding and
+reconciles stale `_generated/node` trees with the current `pyproject.toml`
+files.
 
 When a runtime owner is configured, the workspace also creates one shared
 runtime lifecycle:
 
 - `python-node-runtime` runs the package-owned `build-runtime.ts`.
 - `python-node-runtime:check` verifies the committed `runtime.js`.
-- `python-node-runtime:watch` watches `build-runtime.ts` and `shims/` and runs
-  the same package-owned builder.
 
-`bun run sync --watch` supervises both generic watchers alongside the existing
-`projenrc` and `barrels` watchers. No per-Python-package watcher tasks are
-created. Full synthesis regenerates every binding and reconciles stale
-`_generated/node` trees with the current `pyproject.toml` files.
+The runtime builds during Projen post-synthesis and before compilation, then its
+freshness check runs during tests. `bun run sync -- --watch` therefore keeps it
+current without a dedicated runtime watcher.
 Built-in shims can make ordinary Node imports work under PythonMonkey.
 `functionOverrides` replaces named exports only in the generated runtime, so the
 Node package does not gain Python callbacks or alternate source files. A
@@ -505,23 +502,23 @@ The engine also applies `catalogMode: manual`, which keeps `pnpm add` out of the
 generated catalog, and `verifyDepsBeforeRun: warn`. The file is emitted for the
 tree root only. A member package never gets a nested one.
 
-## Clean and watch generated files
+## Inspect generated files
 
 ```ts
-import { clean, watch } from "@dbx-tools/projen";
+import { clean } from "@dbx-tools/projen";
 
 const generated = await clean.listGeneratedFiles();
-const roots = watch.watchRoots();
 ```
 
-Use these modules for maintenance tasks that should follow the same generated
-file contract as the CLI. `watch.watchLoop()` accepts these roots and an
-application-specific callback.
+Use this module for maintenance tasks that should follow the same generated file
+contract as the CLI.
 
 ## Understand generation limits
 
 - Change `.projenrc.ts` or another owning configuration source, then run
-  `bun run sync` from the workspace root. Don't hand-edit generated files.
+  `bun run sync` from the workspace root. VS Code starts `bun run sync -- --watch`
+  when the folder opens, so an approved background task keeps generated files
+  current while the workspace is open. Don't hand-edit generated files.
 - Synthesis is a whole-tree operation. Don't run `bunx projen` or
   `projen default` from a member package.
 - `packageRoots` discovery creates a package for each source-bearing directory.
@@ -548,14 +545,14 @@ application-specific callback.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
 - `bunApp` / `tsconfig` / `vscode` - generated support files/components.
-- `generated` / `clean` / `watch` / `scaffold` - read-only file ownership,
-  cleanup, watchers, and synth orchestration.
+- `generated` / `clean` / `devWatch` - read-only file ownership, cleanup, and
+  development-command restarts.
 - `publish` - packaging and tag-based release helpers.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
 The engine registers its commands as Projen tasks on the workspace root, so run
-them with `bun run <task>`, including `sync` (add `--watch`), `barrels`, `clean`, and the
-configured `python-node-bindings:*` and `python-node-runtime:*` lifecycles.
+them with `bun run <task>`, including `sync`, `barrels`, `clean`, and the configured
+`python-node-bindings:*` and `python-node-runtime:*` lifecycles.
 [@dbx-tools/cli](../packages/js/cli/dbx-tools/README.md) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
@@ -563,20 +560,22 @@ bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
 Every repo-wide task lives on the root. `compile` batches package tsconfigs in
 up to four `tsc --build` processes and runs package-owned compile lifecycles
-alongside them. `test` delegates with `bun run --filter '*'`. Both read the
-current workspace list, so a new package is covered without a re-synth. Work
-from the root:
+alongside them. `test` runs generated unit and integration paths plus package
+lifecycles. VS Code starts the continuous sync task on folder open. Outside VS
+Code, run `bun run sync -- --watch` for the same behavior or `bun run sync` for
+one synthesis. Work from the root:
 
-| Task                    | What it does                                        |
-| ----------------------- | --------------------------------------------------- |
-| `bun run build`         | synth + workspace compile and tests                 |
-| `bun run compile`       | Batched `tsc --build` plus custom member compiles   |
-| `bun run test`          | `eslint` once, then each member's tests             |
-| `bun run sync`          | re-synth (`--watch` to keep synthing)               |
-| `bun run barrels`       | regenerate the read-only `index.ts` barrels         |
-| `bun run bump`          | increment `VERSION` and regenerate version surfaces |
-| `bun run version:check` | verify every generated version against `VERSION`    |
-| `bun run release`       | run the configured release transaction              |
+| Task                      | What it does                                        |
+| ------------------------- | --------------------------------------------------- |
+| `bun run build`           | synth + workspace compile and tests                 |
+| `bun run compile`         | Batched `tsc --build` plus custom member compiles   |
+| `bun run test`            | `eslint` once, then each member's tests             |
+| `bun run sync`            | run one complete Projen synthesis                   |
+| `bun run sync -- --watch` | resynthesize automatically after workspace changes  |
+| `bun run barrels`         | regenerate the read-only `index.ts` barrels         |
+| `bun run bump`            | increment `VERSION` and regenerate version surfaces |
+| `bun run version:check`   | verify every generated version against `VERSION`    |
+| `bun run release`         | run the configured release transaction              |
 
 Run `bun run release` from any branch. Pending changes are committed and
 the current branch is pushed first. A non-`main` branch then fast-forwards

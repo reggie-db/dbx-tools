@@ -44,10 +44,6 @@ describe("Python Node task components", () => {
       ...bindings.buildTask.steps[0]!.execArgs!,
       "--check",
     ]);
-    assert.deepEqual(bindings.watchTask.steps[0]?.execArgs, [
-      "bun",
-      "node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts",
-    ]);
     assert.deepEqual(runtime.buildTask.steps[0]?.execArgs, [
       "bun",
       "packages/py/node-runtime/build-runtime.ts",
@@ -55,12 +51,6 @@ describe("Python Node task components", () => {
     assert.deepEqual(runtime.checkTask.steps[0]?.execArgs, [
       ...runtime.buildTask.steps[0]!.execArgs!,
       "--check",
-    ]);
-    assert.deepEqual(runtime.watchTask.steps[0]?.execArgs, [
-      "bun",
-      "node_modules/@dbx-tools/projen/tasks/python-node-runtime-watch.ts",
-      "--project",
-      "packages/py/node-runtime",
     ]);
     assert.deepEqual(project.preCompileTask.steps.map(({ spawn }) => spawn).filter(Boolean), [
       bindings.buildTask.name,
@@ -70,6 +60,34 @@ describe("Python Node task components", () => {
       bindings.checkTask.name,
       runtime.checkTask.name,
     ]);
+  });
+
+  it("builds the shared runtime during synthesis for native watch", () => {
+    const directory = temporaryDirectory();
+    const runtimeDirectory = join(directory, "packages/py/node-runtime");
+    mkdirSync(runtimeDirectory, { recursive: true });
+    writeFileSync(
+      join(runtimeDirectory, "build-runtime.ts"),
+      [
+        'import { writeFileSync } from "node:fs";',
+        'import { join } from "node:path";',
+        'writeFileSync(join(import.meta.dirname, "built.txt"), "built\\n");',
+        "",
+      ].join("\n"),
+    );
+
+    const project = new Project({ name: "fixture", outdir: directory });
+    new PythonNodeRuntime(project, { projectDirectory: "packages/py/node-runtime" });
+    const previous = process.env.PROJEN_DISABLE_POST;
+    delete process.env.PROJEN_DISABLE_POST;
+    try {
+      project.synth();
+    } finally {
+      if (previous === undefined) delete process.env.PROJEN_DISABLE_POST;
+      else process.env.PROJEN_DISABLE_POST = previous;
+    }
+
+    assert.equal(readFileSync(join(runtimeDirectory, "built.txt"), "utf8"), "built\n");
   });
 
   it("discovers re-exported functions and generates Python wrappers", () => {

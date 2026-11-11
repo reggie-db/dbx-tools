@@ -229,6 +229,13 @@ describe("DBXToolsPythonWorkspace", () => {
     const packageJson = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
       workspaces?: string[];
     };
+    const taskManifest = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
+      tasks: { compile: { steps?: Array<{ cwd?: string }> } };
+    };
+    assert.equal(
+      taskManifest.tasks.compile.steps?.some(({ cwd }) => cwd?.startsWith("python/")),
+      false,
+    );
     assert.doesNotMatch(
       readFileSync(join(outdir, "pnpm-workspace.yaml"), "utf8"),
       /python\/packages/,
@@ -528,14 +535,20 @@ describe("DBXToolsPythonWorkspace", () => {
       );
       assert.ok(project.tasks.tryFind("python-node-bindings"));
       assert.ok(project.tasks.tryFind("python-node-bindings:check"));
-      assert.ok(project.tasks.tryFind("python-node-bindings:watch"));
+      assert.equal(project.tasks.tryFind("python-node-bindings:watch"), undefined);
       assert.ok(project.tasks.tryFind("python-node-runtime"));
       assert.ok(project.tasks.tryFind("python-node-runtime:check"));
-      assert.ok(project.tasks.tryFind("python-node-runtime:watch"));
-      assert.deepEqual(project.dbxToolsConfig.syncWatchTasks, [
-        "python-node-runtime:watch",
-        "python-node-bindings:watch",
+      assert.equal(project.tasks.tryFind("python-node-runtime:watch"), undefined);
+      assert.deepEqual(project.preCompileTask.steps.map(({ spawn }) => spawn).filter(Boolean), [
+        "python-node-runtime",
+        "python-node-bindings",
       ]);
+      assert.deepEqual(
+        project.testTask.steps
+          .map(({ spawn }) => spawn)
+          .filter((task) => task?.startsWith("python-node-")),
+        ["python-node-runtime:check", "python-node-bindings:check"],
+      );
       rmSync(packagePyproject);
       generatePythonNodeBindings(bindingsOutdir);
       assert.equal(

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { z } from "zod";
-import { taskCommand, taskName, taskOptions } from "../tasks/cli.ts";
+import { runTaskMain, taskCommand, taskOptions } from "../tasks/cli.ts";
 
 const fixtures: string[] = [];
 
@@ -13,10 +13,6 @@ afterEach(() => {
 });
 
 describe("task CLI integration", () => {
-  it("derives stable task names from module URLs", () => {
-    assert.equal(taskName(new URL("../tasks/release.ts", import.meta.url).href), "release");
-  });
-
   it("binds flags and task-scoped environment values through cli-args", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "dbx-tools-task-cli-"));
     fixtures.push(cwd);
@@ -33,5 +29,21 @@ describe("task CLI integration", () => {
     } finally {
       process.chdir(previous);
     }
+  });
+
+  it("builds a callable main directly from a task schema", async () => {
+    const schema = z
+      .object({ watch: z.boolean().default(false).describe("Watch inputs") })
+      .describe("Fixture task");
+    const meta = {
+      main: false,
+      url: new URL("./schema-task.ts", import.meta.url).href,
+    } as ImportMeta;
+    let received: z.output<typeof schema> | undefined;
+    const main = await runTaskMain(meta, schema, (options) => {
+      received = options;
+    });
+    await main(["--watch"]);
+    assert.deepEqual(received, { watch: true });
   });
 });

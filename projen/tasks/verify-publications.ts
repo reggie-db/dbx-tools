@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { log, poll, mapConcurrent, toError } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { runTaskMain } from "./cli.ts";
 import {
   npmReleaseMatches,
   publishedNpmRelease,
@@ -269,30 +269,23 @@ export const VerifyPublicationsOptionsSchema = z
   .describe("Options for the public package availability barrier");
 
 /** Parse expected release artifacts and wait for their public registry records. */
-export async function main(args: readonly string[] = process.argv.slice(2)): Promise<void> {
-  const options = await taskOptions(
-    taskCommand(
-      import.meta.url,
-      "Wait for released packages to become publicly available",
-      VerifyPublicationsOptionsSchema,
-    ),
-    VerifyPublicationsOptionsSchema,
-    args,
-  );
-  const probes = [
-    ...(options.npmDirectory
-      ? npmPublicationProbes(resolve(options.npmDirectory), options.version)
-      : []),
-    ...(options.pypiDirectory
-      ? pypiPublicationProbes(resolve(options.pypiDirectory), options.version)
-      : []),
-  ];
-  await waitForPublications(probes, {
-    concurrency: options.concurrency,
-    intervalMs: options.intervalSeconds * 1_000,
-    requestTimeoutMs: options.requestTimeoutSeconds * 1_000,
-    timeoutMs: options.timeoutSeconds * 1_000,
-  });
-}
-
-await runTaskMain(import.meta, main);
+export const main = await runTaskMain(
+  import.meta,
+  VerifyPublicationsOptionsSchema,
+  async (options) => {
+    const probes = [
+      ...(options.npmDirectory
+        ? npmPublicationProbes(resolve(options.npmDirectory), options.version)
+        : []),
+      ...(options.pypiDirectory
+        ? pypiPublicationProbes(resolve(options.pypiDirectory), options.version)
+        : []),
+    ];
+    await waitForPublications(probes, {
+      concurrency: options.concurrency,
+      intervalMs: options.intervalSeconds * 1_000,
+      requestTimeoutMs: options.requestTimeoutSeconds * 1_000,
+      timeoutMs: options.timeoutSeconds * 1_000,
+    });
+  },
+);

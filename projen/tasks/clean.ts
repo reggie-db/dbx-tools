@@ -3,30 +3,22 @@
 import { relative } from "node:path";
 import { log, pluralize } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { runTaskMain, taskCommand, taskOptions } from "./cli.ts";
+import { runTaskMain } from "./cli.ts";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean.ts";
 import { repoRoot, toPosix } from "../src/packages.ts";
 
 const logger = log.logger("projen:clean");
-export const CleanOptionsSchema = z.object({
-  yes: z
-    .boolean()
-    .default(false)
-    .describe("Remove every generated and dependency path without prompting")
-    .meta({ short: "y", env: [] }),
-});
+export const CleanOptionsSchema = z
+  .object({
+    yes: z
+      .boolean()
+      .default(false)
+      .describe("Remove every generated and dependency path without prompting")
+      .meta({ short: "y", env: [] }),
+  })
+  .describe("Remove generated files and dependency directories");
 
-export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
-  const { yes } = await taskOptions(
-    taskCommand(
-      import.meta.url,
-      "Remove generated files and dependency directories",
-      CleanOptionsSchema,
-    ),
-    CleanOptionsSchema,
-    args,
-  );
-
+export const main = await runTaskMain(import.meta, CleanOptionsSchema, async ({ yes }) => {
   const [files, nodeModules] = await Promise.all([listGeneratedFiles(), listNodeModulesDirs()]);
   const targets = [...files, ...nodeModules];
 
@@ -84,6 +76,4 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
   const removedNodeModules = picked.some((p) => nodeModules.includes(p));
   const n = removePaths(picked);
   clack.outro(`removed ${pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);
-}
-
-await runTaskMain(import.meta, main);
+});
