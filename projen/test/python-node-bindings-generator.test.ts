@@ -257,6 +257,43 @@ describe("Python Node task components", () => {
     },
   );
 
+  it("keeps fingerprints independent of external dependency install layout", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = join(directory, "packages/fixture-entry");
+    mkdirSync(entryDirectory, { recursive: true });
+    writeFileSync(
+      join(entryDirectory, "package.json"),
+      JSON.stringify({
+        name: "fixture-entry",
+        type: "module",
+        exports: "./index.ts",
+        dependencies: { "external-package": "1.0.0" },
+      }),
+    );
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      'import { value } from "external-package"; export function result(): string { return value; }\n',
+    );
+    writeFileSync(
+      join(directory, "pnpm-workspace.yaml"),
+      "packages:\n  - packages/fixture-entry\n",
+    );
+    writeFileSync(join(directory, "bun.lock"), 'lockfileVersion = 1\nexternal-package = "1.0.0"\n');
+    mkdirSync(join(directory, "node_modules"), { recursive: true });
+    symlinkSync(entryDirectory, join(directory, "node_modules/fixture-entry"), "dir");
+    const nestedExternal = join(entryDirectory, "node_modules/external-package");
+    writeExternalPackage(nestedExternal);
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
+
+    const generated = runBindingTask(directory);
+    assert.equal(generated.exitCode, 0, generated.stderr.toString());
+
+    rmSync(nestedExternal, { recursive: true });
+    writeExternalPackage(join(directory, "node_modules/external-package"));
+    const relocated = runBindingTask(directory, "--check");
+    assert.equal(relocated.exitCode, 0, relocated.stderr.toString());
+  });
+
   it("always generates bindings beneath the Python package generated tree", () => {
     const directory = temporaryDirectory();
     const entryDirectory = packageDirectory(directory, "fixture-entry");
@@ -614,6 +651,20 @@ function packageDirectory(root: string, name: string): string {
     JSON.stringify({ name, type: "module", exports: "./index.ts" }),
   );
   return directory;
+}
+
+function writeExternalPackage(directory: string): void {
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, "package.json"),
+    JSON.stringify({
+      name: "external-package",
+      version: "1.0.0",
+      type: "module",
+      exports: "./index.ts",
+    }),
+  );
+  writeFileSync(join(directory, "index.ts"), 'export const value = "external";\n');
 }
 
 function writeFixturePyproject(

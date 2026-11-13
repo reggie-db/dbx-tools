@@ -14,7 +14,7 @@ import { makeReadonly } from "./generated.ts";
 import { publicFunctionExports, publicNamespaceExports } from "./module-exports.ts";
 import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
-const FINGERPRINT_VERSION = 5;
+const FINGERPRINT_VERSION = 6;
 const INPUT_FINGERPRINT_LABEL = "dbx-tools binding inputs sha256";
 const CONTENT_FINGERPRINT_LABEL = "dbx-tools binding content sha256";
 const PYTHON_KEYWORDS = new Set([
@@ -184,6 +184,8 @@ export function pythonNodeBindingInputFingerprint(
   ]);
   const versionFile = join(root, "VERSION");
   if (existsSync(versionFile)) files.add(canonicalPath(versionFile));
+  const lockfile = join(root, "bun.lock");
+  if (existsSync(lockfile)) files.add(canonicalPath(lockfile));
   for (const config of configs) {
     for (const input of config.sourceInputs) files.add(canonicalPath(resolve(root, input)));
     for (const { handlerFile } of config.functionOverrides) files.add(canonicalPath(handlerFile));
@@ -468,7 +470,10 @@ function transitiveSourceFiles(
     const candidate = canonicalPath(pending.pop()!);
     if (
       visited.has(candidate) ||
-      !allowed.some((directory) => relativePathWithin(directory, candidate) !== undefined)
+      !allowed.some((directory) => {
+        const path = relativePathWithin(directory, candidate);
+        return path !== undefined && !path.split(/[\\/]/).includes("node_modules");
+      })
     ) {
       continue;
     }
