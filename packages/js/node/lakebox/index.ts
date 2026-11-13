@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/lakebox";
-export const PACKAGE_VERSION = "0.9.208";
+export const PACKAGE_VERSION = "0.9.209";
 export * as keyStore from "./src/key-store.ts";
 export * as lifecycle from "./src/lifecycle.ts";
 export * as rest from "./src/rest.ts";

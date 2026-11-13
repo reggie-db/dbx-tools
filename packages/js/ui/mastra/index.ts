@@ -3,4 +3,4 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-mastra";
-export const PACKAGE_VERSION = "0.9.208";
+export const PACKAGE_VERSION = "0.9.209";
