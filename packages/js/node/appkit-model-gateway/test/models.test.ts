@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bundledModelCatalogIndex } from "@dbx-tools/dbx-model-catalog/snapshot";
+import { modelCatalogRecordFor } from "@dbx-tools/model";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type { ModelCapabilities, ModelTarget } from "@dbx-tools/shared-model-gateway";
 
@@ -202,10 +202,9 @@ describe("model gateway catalogue", () => {
   });
 
   it("omits deprecated models from both catalogue shapes", () => {
-    const catalog = bundledModelCatalogIndex.records.find(
-      (record) => record.status === "deprecated",
-    );
+    const catalog = modelCatalogRecordFor("databricks-gemini-3-6-flash");
     assert.ok(catalog);
+    assert.equal(catalog.status, "deprecated");
     const deprecated = {
       ...target("gpt"),
       endpoint: {
@@ -287,7 +286,7 @@ function unnamed(displayName: string): ModelTarget {
 }
 
 function catalogTarget(id: string): ModelTarget {
-  const catalog = bundledModelCatalogIndex.records.find((record) => record.id === id);
+  const catalog = modelCatalogRecordFor(id);
   assert.ok(catalog);
   return {
     ...target("gpt"),

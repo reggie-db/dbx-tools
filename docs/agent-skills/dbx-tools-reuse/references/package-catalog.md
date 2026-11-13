@@ -1,6 +1,6 @@
 # dbx-tools package catalog
 
-Generated from repository manifests and package READMEs for dbx-tools 0.9.206.
+Generated from repository manifests and package READMEs for dbx-tools 0.9.207.
 Inspect the installed manifest, README, exports, and source before relying on a capability.
 
 ## CLI tools
@@ -61,6 +61,6 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 ## React UI
 
-- `@dbx-tools/ui` - Use this React package for the shared Databricks AppKit UI foundation, branding, passwordless authentication, email surfaces, and Databricks AI Search controls. Import only the subpaths that your browser application uses. Source: `packages/js/ui/appkit`.
+- `@dbx-tools/ui` - Use this React package for the shared Databricks AppKit UI foundation, branding, passwordless authentication, reusable data tables, email surfaces, and Databricks AI Search controls. Import only the subpaths that your browser application uses. Source: `packages/js/ui/appkit`.
 - `@dbx-tools/ui-lakebox` - Render Lakebox lifecycle controls, user services, and live machine metrics in an AppKit React application. Source: `packages/js/ui/lakebox`.
 - `@dbx-tools/ui-mastra` - Add a React chat surface to @dbx-tools/appkit-mastra. The package supports streaming, model selection, AI/BI Genie progress, charts, tables, approvals, history, threads, export, and MLflow feedback. Source: `packages/js/ui/mastra`.

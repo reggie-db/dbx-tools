@@ -3,4 +3,4 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-appkit";
-export const PACKAGE_VERSION = "0.9.206";
+export const PACKAGE_VERSION = "0.9.207";

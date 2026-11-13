@@ -19,7 +19,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@dbx-tools/dbx-model-catalog": "catalog:",
     "@types/express": "catalog:",
     "@types/node": "catalog:",
     "openai": "^6.16.0",
@@ -53,7 +52,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.206",
+  "version": "0.9.207",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [

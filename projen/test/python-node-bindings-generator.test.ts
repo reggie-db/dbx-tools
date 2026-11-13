@@ -487,6 +487,37 @@ describe("Python Node task components", () => {
     assert.doesNotMatch(runtime, /clone\(util\.mergeDefs\(/);
   });
 
+  it("preserves Zod-inferred names returned by client methods", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    symlinkSync(
+      join(import.meta.dirname, "../../node_modules/zod"),
+      join(directory, "node_modules/zod"),
+      "dir",
+    );
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      [
+        'import { z } from "zod";',
+        "export const ResolvedSchema = z.object({ host: z.string() });",
+        "export type Resolved = z.infer<typeof ResolvedSchema>;",
+        "export class Client { async resolve(): Promise<Resolved> { return ResolvedSchema.parse({ host: 'localhost' }); } }",
+        "export function createClient(): Client { return new Client(); }",
+      ].join("\n"),
+    );
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+
+    const bindings = readFileSync(
+      join(directory, "python/src/fixture/runtime/_generated/node/fixture_entry/index.py"),
+      "utf8",
+    );
+    assert.match(bindings, /class ResolvedResponse\(TypedDict\):/);
+    assert.match(bindings, /async def resolve\(\n        self,\n    \) -> ResolvedResponse:/);
+  });
+
   it("generates nested Zod-inferred records without mirrored interfaces", () => {
     const directory = temporaryDirectory();
     const entryDirectory = packageDirectory(directory, "fixture-entry");

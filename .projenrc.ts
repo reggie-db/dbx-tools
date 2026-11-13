@@ -861,7 +861,6 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
     "zod@catalog:",
   );
   p.addDevDeps(
-    "@dbx-tools/dbx-model-catalog@catalog:",
     "@types/express@catalog:",
     "openai@^6.16.0",
     "vitest@catalog:",

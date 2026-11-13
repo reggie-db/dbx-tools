@@ -20,10 +20,22 @@ interface PackageManifest {
   readonly peerDependencies?: Readonly<Record<string, string>>;
 }
 
-/** Deliberate non-exact internal dependencies, keyed by package, field, and dependency. */
+/** Deliberate external `@dbx-tools/*` dependencies, keyed by package, field, and dependency. */
 const INTERNAL_DEPENDENCY_EXCEPTIONS = new Map<string, string>([
   [
     "@dbx-tools/model:dependencies:@dbx-tools/dbx-model-catalog",
+    "The public model catalog is released from the separate dbx-model-catalog repository.",
+  ],
+  [
+    "@dbx-tools/shared-mastra:dependencies:@dbx-tools/dbx-model-catalog",
+    "The public model catalog is released from the separate dbx-model-catalog repository.",
+  ],
+  [
+    "@dbx-tools/shared-model-gateway:dependencies:@dbx-tools/dbx-model-catalog",
+    "The public model catalog is released from the separate dbx-model-catalog repository.",
+  ],
+  [
+    "@dbx-tools/shared-model:dependencies:@dbx-tools/dbx-model-catalog",
     "The public model catalog is released from the separate dbx-model-catalog repository.",
   ],
 ]);

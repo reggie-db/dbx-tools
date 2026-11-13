@@ -689,6 +689,9 @@ export async function runPythonNodeBindings(
   function declaredTypeName(node: ts.TypeNode | undefined): string | undefined {
     if (!node) return undefined;
     if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName)) {
+      if (["Promise", "PromiseLike"].includes(node.typeName.text)) {
+        return declaredTypeName(node.typeArguments?.[0]);
+      }
       return node.typeName.text;
     }
     return undefined;
@@ -748,10 +751,12 @@ export async function runPythonNodeBindings(
     if ([symbolName, targetName].some((name) => ["Promise", "PromiseLike"].includes(name ?? ""))) {
       const [resolved] = checker.getTypeArguments(type as ts.TypeReference);
       if (!resolved) throw new Error(`${path} promise type could not be resolved`);
-      return pythonReturnType(checker, resolved, responses, protocols, path);
+      return pythonReturnType(checker, resolved, responses, protocols, path, preferredName);
     }
     const awaited = checker.getAwaitedType(type) ?? type;
-    if (awaited !== type) return pythonReturnType(checker, awaited, responses, protocols, path);
+    if (awaited !== type) {
+      return pythonReturnType(checker, awaited, responses, protocols, path, preferredName);
+    }
     if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return "Any";
     if (type.flags & (ts.TypeFlags.Void | ts.TypeFlags.Undefined | ts.TypeFlags.Null)) {
       return "None";
@@ -840,6 +845,7 @@ export async function runPythonNodeBindings(
             responses,
             protocols,
             `${path}.${property.name}.return`,
+            declaredTypeName(methodDeclaration?.type),
           ),
         };
       });
