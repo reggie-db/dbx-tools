@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/lakebase";
-export const PACKAGE_VERSION = "0.9.209";
+export const PACKAGE_VERSION = "0.9.210";
 export * as address from "./src/address.ts";
 export * as bindings from "./src/bindings.ts";
 export * from "./src/bindings.ts";

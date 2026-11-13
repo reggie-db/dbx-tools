@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model-protocol";
-export const PACKAGE_VERSION = "0.9.209";
+export const PACKAGE_VERSION = "0.9.210";
 export * as gatewayDecode from "./src/gateway-decode.ts";
 export * as gatewayEncode from "./src/gateway-encode.ts";
 export * as provider from "./src/provider.ts";

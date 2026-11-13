@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli";
-export const PACKAGE_VERSION = "0.9.209";
+export const PACKAGE_VERSION = "0.9.210";
 export * as bootstrap from "./src/bootstrap.ts";
 export * as bun from "./src/bun.ts";
 export * as cli from "./src/cli.ts";

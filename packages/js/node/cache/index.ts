@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cache";
-export const PACKAGE_VERSION = "0.9.209";
+export const PACKAGE_VERSION = "0.9.210";
 export * as cache from "./src/cache.ts";
 export { createCache, cachePath, projectCache, flushCache, closeCache, cacheKeys, deleteCachedValue, getOrSet } from "./src/cache.ts";
 export type { CacheLevel, CacheOptions, ProjectCacheOptions, RefreshAfterWrite, GetOrSetOptions } from "./src/cache.ts";
