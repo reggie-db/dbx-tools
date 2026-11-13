@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model-gateway";
-export const PACKAGE_VERSION = "0.9.207";
+export const PACKAGE_VERSION = "0.9.208";
 export * as aIDecide from "./src/ai-decide.ts";
 export * as client from "./src/client.ts";
 export * as contracts from "./src/contracts.ts";

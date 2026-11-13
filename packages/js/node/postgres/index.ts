@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/postgres";
-export const PACKAGE_VERSION = "0.9.207";
+export const PACKAGE_VERSION = "0.9.208";
 export * as advisoryLock from "./src/advisory-lock.ts";
 export * as bindings from "./src/bindings.ts";
 export * from "./src/bindings.ts";
