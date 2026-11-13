@@ -357,7 +357,7 @@ function priceForCounts(rate: Price, counts: Readonly<Record<string, number>>): 
   let price = 0;
   for (const [name, tokens] of Object.entries(counts)) {
     if (tokens === 0) continue;
-    const perMillionTokens = rate.rates[name];
+    const perMillionTokens = rate.rates[name] ?? rate.rates[`short_context_${name}`];
     if (perMillionTokens === undefined) return undefined;
     price += (tokens / 1_000_000) * perMillionTokens;
   }

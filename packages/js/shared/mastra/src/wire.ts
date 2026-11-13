@@ -649,6 +649,11 @@ export const ModelUsagePartDataSchema = ModelRoutePartDataSchema.extend({
     .nonnegative()
     .optional()
     .describe("Estimated turn cost in DBUs from documented Databricks token rates."),
+  estimatedCostUsd: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe("Estimated turn cost in USD from documented Databricks token rates."),
 })
   .strict()
   .describe("Caller-consumable model routing, usage, and estimated list-price cost for one turn.");

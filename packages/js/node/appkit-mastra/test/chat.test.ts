@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { modelCatalogRecordFor } from "@dbx-tools/model";
 import { logger } from "@dbx-tools/shared-core";
 import {
   MODEL_ROUTE_PART_TYPE,
@@ -29,16 +30,8 @@ import {
 import { withRequestMemoryScope, type MemoryBuilder } from "../src/memory.ts";
 import { MASTRA_MODEL_ROUTE_KEY } from "../src/serving.ts";
 
-const GPT_5_4_PRICE = {
-  tier: "standard",
-  condition: "short-context",
-  inputDbuPerMillionTokens: 35.714,
-  outputDbuPerMillionTokens: 214.286,
-  cacheReadDbuPerMillionTokens: 3.571,
-  cacheWriteDbuPerMillionTokens: null,
-  cacheWriteOneHourDbuPerMillionTokens: null,
-  usdPerDbu: { aws: 0.07, azure: 0.07, gcp: 0.07 },
-} as const;
+const GPT_5_4_PRICE = modelCatalogRecordFor("databricks-gpt-5-4")?.average_price.DBU;
+assert.ok(GPT_5_4_PRICE);
 
 async function transformResponseChunks(chunks: ChunkType[]): Promise<ChunkType[]> {
   const stream = new ReadableStream<ChunkType>({
@@ -100,6 +93,7 @@ describe("background chat routes", () => {
         pricing: GPT_5_4_PRICE,
         usage: { inputTokens: 400, outputTokens: 100, totalTokens: 500 },
         estimatedCostDbu: 0.0357142,
+        estimatedCostUsd: 0.0025,
       },
     });
   });

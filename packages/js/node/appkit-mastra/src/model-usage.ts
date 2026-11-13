@@ -72,6 +72,7 @@ export function modelUsagePartData(
       ...(usage.cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
     },
     ...(price ? { estimatedCostDbu: price.price.dbu } : {}),
+    ...(price?.price.usd !== undefined ? { estimatedCostUsd: price.price.usd } : {}),
   });
 }
 

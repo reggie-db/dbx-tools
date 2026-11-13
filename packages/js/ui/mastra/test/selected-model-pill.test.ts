@@ -10,6 +10,7 @@ import {
   normalizeChatMetrics,
   selectedModelActivity,
   selectedModelRoute,
+  selectedModelTurnMetrics,
 } from "../src/react/selected-model-pill.tsx";
 
 describe("selected model pill", () => {
@@ -74,5 +75,29 @@ describe("selected model pill", () => {
     assert.deepEqual(normalizeChatMetrics("time"), ["time"]);
     assert.deepEqual(normalizeChatMetrics(["usd", "tokens", "usd"]), ["usd", "tokens"]);
     assert.deepEqual(normalizeChatMetrics(undefined), []);
+  });
+
+  it("uses the catalog-derived USD estimate without translating pricing", () => {
+    assert.deepEqual(
+      selectedModelTurnMetrics({
+        parts: [
+          {
+            type: MODEL_USAGE_PART_TYPE,
+            data: {
+              model: "databricks-gpt-5-4",
+              selection: "explicit",
+              pricing: {
+                unit: "per_million_tokens",
+                rates: { short_context_input: 35.714, short_context_output: 214.286 },
+              },
+              usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 },
+              estimatedCostDbu: 0.000714284,
+              estimatedCostUsd: 0.00005,
+            },
+          },
+        ],
+      }),
+      { tokens: 10, dbu: 0.000714284, usd: 0.00005 },
+    );
   });
 });

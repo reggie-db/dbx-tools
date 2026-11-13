@@ -1,20 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { modelCatalogRecordFor } from "@dbx-tools/model";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { modelRoutePartData, modelUsagePartData } from "../src/model-usage.ts";
 import { MASTRA_MODEL_ROUTE_KEY } from "../src/serving.ts";
 
-const GPT_5_4_PRICE = {
-  tier: "standard",
-  condition: "short-context",
-  inputDbuPerMillionTokens: 35.714,
-  outputDbuPerMillionTokens: 214.286,
-  cacheReadDbuPerMillionTokens: 3.571,
-  cacheWriteDbuPerMillionTokens: null,
-  cacheWriteOneHourDbuPerMillionTokens: null,
-  usdPerDbu: { aws: 0.07, azure: 0.07, gcp: 0.07 },
-} as const;
+const GPT_5_4_PRICE = modelCatalogRecordFor("databricks-gpt-5-4")?.average_price.DBU;
+assert.ok(GPT_5_4_PRICE);
 
 describe("Mastra model usage events", () => {
   it("publishes routing, cumulative tokens, and estimated cost", () => {
@@ -63,6 +56,7 @@ describe("Mastra model usage events", () => {
       pricing: GPT_5_4_PRICE,
       usage: { inputTokens: 800, outputTokens: 200, totalTokens: 1_000 },
       estimatedCostDbu: 0.0714284,
+      estimatedCostUsd: 0.005,
     });
   });
 

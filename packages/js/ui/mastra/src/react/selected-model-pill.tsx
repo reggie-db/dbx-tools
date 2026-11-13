@@ -71,12 +71,6 @@ export interface SelectedModelTurnMetrics {
   usd?: number;
 }
 
-function averageUsdPerDbu(route: ModelRoutePartData): number | undefined {
-  const values = Object.values(route.pricing?.usdPerDbu ?? {});
-  if (values.length === 0) return undefined;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function elapsedMs(
   message: Pick<UIMessage, "metadata">,
   active: boolean,
@@ -124,13 +118,13 @@ function activityTurnMetrics(
   fallbackStartedAt: number,
 ): SelectedModelTurnMetrics {
   const dbu = activity.usage?.estimatedCostDbu;
-  const usdPerDbu = averageUsdPerDbu(activity.route);
+  const usd = activity.usage?.estimatedCostUsd;
   const timeMs = elapsedMs(message, active, now, fallbackStartedAt);
   return {
     ...(activity.usage ? { tokens: activity.usage.usage.totalTokens } : {}),
     ...(timeMs !== undefined ? { timeMs } : {}),
     ...(dbu !== undefined ? { dbu } : {}),
-    ...(dbu !== undefined && usdPerDbu !== undefined ? { usd: dbu * usdPerDbu } : {}),
+    ...(usd !== undefined ? { usd } : {}),
   };
 }
 

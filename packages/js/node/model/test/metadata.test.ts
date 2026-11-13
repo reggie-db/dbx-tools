@@ -63,6 +63,25 @@ test("estimates cost from catalog-owned average price records", () => {
   assert.throws(() => estimateModelTokenPrice(record.id, { inputTokens: -1 }), RangeError);
 });
 
+test("uses catalog short-context rates as the default token price", () => {
+  const record = bundledModelCatalogIndex.records.find(
+    (candidate) =>
+      candidate.average_price.DBU?.rates.short_context_input !== undefined &&
+      candidate.average_price.DBU?.rates.short_context_output !== undefined,
+  );
+  assert.ok(record);
+  const estimate = estimateModelTokenPrice(record.id, {
+    inputTokens: 1_000_000,
+    outputTokens: 1_000_000,
+  });
+  assert.ok(estimate);
+  assert.equal(
+    estimate.price.dbu,
+    record.average_price.DBU!.rates.short_context_input! +
+      record.average_price.DBU!.rates.short_context_output!,
+  );
+});
+
 test("uses catalog reasoning efforts before local family defaults", () => {
   const record = bundledModelCatalogIndex.records.find(
     (candidate) =>
