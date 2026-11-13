@@ -14,11 +14,11 @@ import {
   type DatabricksAuthDependencies,
 } from "@dbx-tools/auth";
 import { listProfiles as listAuthProfiles } from "@dbx-tools/auth";
+import type { CatalogModelRecord } from "@dbx-tools/dbx-model-catalog/browser";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 import { toError, log, isRecord } from "@dbx-tools/shared-core";
 import {
   ModelClass,
-  type ModelMetadata,
   type ModelQuery,
   type RankedModel,
   type ResolvedModelSelection,
@@ -33,7 +33,7 @@ import {
   invocationsUrl,
   responsesUpstreamUrl,
 } from "./invoke.ts";
-import { hydrateModelMetadata, modelMetadataFor } from "./metadata.ts";
+import { hydrateModelCatalog, modelCatalogRecordFor } from "./metadata.ts";
 import { modelServingApi, prefersSystemModelService, systemModelService } from "./policy.ts";
 import { lookupModels, resolveModel } from "./selection.ts";
 
@@ -54,8 +54,8 @@ export interface ModelClientOptions {
   auth?: ModelAuthOptions;
   /** In-memory endpoint catalogue TTL in milliseconds. */
   cacheTtlMs?: number;
-  /** Hydrate Node-only metadata caches before constructing the client. */
-  hydrateMetadata?: boolean;
+  /** Hydrate the public catalog cache before constructing the client. */
+  hydrateCatalog?: boolean;
   /** Prefer `system.ai.*` services over serving endpoints for non-exact model selection. */
   preferSystemModels?: boolean;
 }
@@ -93,7 +93,7 @@ export interface ModelRoute {
   readonly apiBase: string;
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
-  readonly metadata: ModelMetadata;
+  readonly catalog?: CatalogModelRecord;
 }
 
 /** Stable model facade shared by Node and generated language bindings. */
@@ -101,7 +101,7 @@ export interface ModelClient {
   listModels(refresh?: boolean): Promise<ServingEndpointSummary[]>;
   searchModels(query?: ModelQuery, refresh?: boolean): Promise<RankedModel[]>;
   route(input?: ModelRouteInput): Promise<ModelRoute>;
-  metadata(model: string | ServingEndpointSummary): ModelMetadata;
+  catalog(model: string | ServingEndpointSummary): CatalogModelRecord | undefined;
   status(): ModelClientStatus;
 }
 
@@ -217,6 +217,7 @@ class DefaultModelClient implements ModelClient {
       ? aiGatewayCodexResponsesUrl(host)
       : routeUrl(host, resolved.modelId, protocol);
     const headers = await this.client.auth.headers({ login });
+    const catalog = modelCatalogRecordFor(endpoint ?? resolved.modelId);
     return {
       modelId: system ? service : resolved.modelId,
       ...(endpoint ? { endpoint: cloneEndpoint(endpoint) } : {}),
@@ -226,12 +227,12 @@ class DefaultModelClient implements ModelClient {
       apiBase: new URL("serving-endpoints", `${host.replace(/\/$/, "")}/`).toString(),
       url,
       headers,
-      metadata: modelMetadataFor(endpoint ?? resolved.modelId),
+      ...(catalog ? { catalog } : {}),
     };
   }
 
-  metadata(model: string | ServingEndpointSummary): ModelMetadata {
-    return modelMetadataFor(model);
+  catalog(model: string | ServingEndpointSummary): CatalogModelRecord | undefined {
+    return modelCatalogRecordFor(model);
   }
 
   status(): ModelClientStatus {
@@ -319,7 +320,7 @@ function embeddingDimension(value: unknown): number | undefined {
 /** Create an authentication-aware Databricks model client. */
 export async function createModelClient(options: ModelClientOptions = {}): Promise<ModelClient> {
   const cacheTtlMs = validateCacheTtl(options.cacheTtlMs);
-  if (options.hydrateMetadata ?? true) await hydrateModelMetadata();
+  if (options.hydrateCatalog ?? true) await hydrateModelCatalog();
   return new DefaultModelClient(
     new AuthenticatedModelClient(await createAuthClient(options.auth), globalThis.fetch),
     cacheTtlMs,
@@ -346,7 +347,7 @@ export async function createModelClientWithDependencies(
   options: ModelClientOptions,
   dependencies: DatabricksAuthDependencies,
 ): Promise<ModelClient> {
-  if (options.hydrateMetadata ?? true) await hydrateModelMetadata();
+  if (options.hydrateCatalog ?? true) await hydrateModelCatalog();
   return new DefaultModelClient(
     new AuthenticatedModelClient(
       await createAuthClient(options.auth, dependencies),
@@ -394,6 +395,6 @@ function cloneEndpoint(endpoint: ServingEndpointSummary): ServingEndpointSummary
     ...(endpoint.profile ? { profile: { ...endpoint.profile } } : {}),
     ...(endpoint.serviceNames ? { serviceNames: { ...endpoint.serviceNames } } : {}),
     ...(endpoint.reasoningEfforts ? { reasoningEfforts: [...endpoint.reasoningEfforts] } : {}),
-    ...(endpoint.status ? { status: { ...endpoint.status } } : {}),
+    ...(endpoint.catalog ? { catalog: structuredClone(endpoint.catalog) } : {}),
   };
 }

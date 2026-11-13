@@ -14,19 +14,25 @@ describe("reasoning adaptation", () => {
     assert.deepEqual(adapted.body.reasoning, { effort: "medium" });
   });
 
-  it("clamps Qwen requests to its published low-medium ladder", () => {
-    for (const requested of ["high", "xhigh", "max", "none", null, "not-a-level"]) {
-      const adapted = adaptInferenceReasoning("databricks-qwen-3-32b", {
-        model: "databricks-qwen-3-32b",
+  it("clamps requests to the direct catalog reasoning ladder", () => {
+    for (const [requested, expected] of [
+      ["xhigh", "high"],
+      ["max", "high"],
+      ["none", "medium"],
+      [null, "medium"],
+      ["not-a-level", "medium"],
+    ] as const) {
+      const adapted = adaptInferenceReasoning("databricks-gpt-5-4", {
+        model: "databricks-gpt-5-4",
         reasoning_effort: requested,
       });
       assert.equal(adapted.changed, true);
-      assert.equal(adapted.wireEffort, "medium");
-      assert.equal(adapted.body.reasoning_effort, "medium");
+      assert.equal(adapted.wireEffort, expected);
+      assert.equal(adapted.body.reasoning_effort, expected);
     }
 
-    const absent = adaptInferenceReasoning("databricks-qwen-3-32b", {
-      model: "databricks-qwen-3-32b",
+    const absent = adaptInferenceReasoning("databricks-gpt-5-4", {
+      model: "databricks-gpt-5-4",
     });
     assert.equal(absent.changed, false);
   });

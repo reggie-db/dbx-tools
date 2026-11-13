@@ -8,9 +8,9 @@ import { createCache, getOrSet } from "@dbx-tools/cache";
 import { toError, log } from "@dbx-tools/shared-core";
 
 import { modelMetadataCache } from "./_cache.ts";
-import { MODEL_METADATA_TTL_MS } from "./metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
+const MODEL_METADATA_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Factory inputs for one named metadata cache. */
 export interface MetadataCacheOptions<T> {

@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/dbx-model-catalog",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-genie",
       "version": "workspace:*",
       "type": "runtime"

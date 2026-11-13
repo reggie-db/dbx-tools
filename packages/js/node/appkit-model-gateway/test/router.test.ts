@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type express from "express";
 import type {
   ModelCapabilities,
   ModelTarget,
   RequestedFeatures,
 } from "@dbx-tools/shared-model-gateway";
+import type express from "express";
 import {
   isCodexRequest,
   requestedFeatures,

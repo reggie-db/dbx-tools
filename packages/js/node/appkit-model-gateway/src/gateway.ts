@@ -155,12 +155,12 @@ export class ModelGateway {
       options.preferSystemModels ?? MODEL_GATEWAY_DEFAULTS.preferSystemModels;
   }
 
-  /** Return the live OpenAI model list, including Codex metadata when requested. */
+  /** Return the live OpenAI model list, including direct catalog records when requested. */
   async models(
     codex = false,
     search?: string,
     modelSource: ModelSource | "all" = "foundation",
-    includeMetadata = false,
+    includeCatalog = false,
   ): Promise<ModelListResponse> {
     logger.debug("listing models", { codex, search });
     const query = search?.trim();
@@ -207,7 +207,7 @@ export class ModelGateway {
       this.preferSystemModels,
       smartRouterEnabled && (!query || smartRouterSearch),
       aiDecideEnabled && (!query || aiDecideSearch),
-      includeMetadata,
+      includeCatalog,
     );
     return smartRouterSearch || aiDecideSearch
       ? onlyVirtualModel(payload, smartRouterSearch ? SMART_ROUTER_MODEL_ID : AI_DECIDE_MODEL_ID)

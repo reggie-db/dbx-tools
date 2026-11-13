@@ -7,7 +7,7 @@ import { AiDecideRouterService } from "../src/ai-decide.ts";
 import type { SmartRouterProbeRecord, SmartRouterProbeStore } from "../src/smart-router.ts";
 
 describe("AiDecideRouterService", () => {
-  it("sends normalized task context and ranked foundation-model metadata", async () => {
+  it("sends normalized task context and direct catalog benchmarks", async () => {
     let captured: Readonly<Record<string, unknown>> | undefined;
     const service = new AiDecideRouterService((_client, body) => {
       if ((body.questions as { task_complexity?: unknown }).task_complexity) {
@@ -73,7 +73,8 @@ describe("AiDecideRouterService", () => {
     assert.equal(state.candidates.length, 1);
     const benchmarks = state.candidates.find(({ id }) => id === "databricks-gpt-5-4-mini")
       ?.benchmarks as Record<string, number | null>;
-    assert.equal(benchmarks.quality_percentile, 60.75);
+    assert.equal(benchmarks.best_catalog_rank, 54);
+    assert.equal(benchmarks.preference_rating, 1249.9484524077775);
     assert.equal(benchmarks.normalized_response_time_ms, 3_840);
     assert.equal(benchmarks.time_to_first_token_ms, 446.472);
     assert.equal(benchmarks.output_tokens_per_second, 150.856);
@@ -82,7 +83,7 @@ describe("AiDecideRouterService", () => {
       .instructions;
     assert.match(instructions, /Judge current_request/);
     assert.match(instructions, /dependencies, configuration, APIs, and multiple code artifacts/);
-    assert.match(instructions, /Lower normalized_response_time_ms/);
+    assert.match(instructions, /Lower best_catalog_rank, normalized_response_time_ms/);
     assert.equal((captured?.questions as { task_complexity?: unknown }).task_complexity, undefined);
     assert.deepEqual(
       state.candidates

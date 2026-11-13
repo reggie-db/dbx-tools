@@ -23,7 +23,8 @@ export interface ModelGatewayClientOptions {
 export interface ListModelsOptions {
   readonly search?: string;
   readonly codex?: boolean;
-  readonly metadata?: boolean;
+  /** Include the direct dbx-model-catalog record for each matched model. */
+  readonly catalog?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -52,7 +53,7 @@ export function createModelGatewayClient(
     async listModels(request: ListModelsOptions = {}) {
       const url = modelsUrl(options.baseUrl);
       if (request.search?.trim()) url.searchParams.set("search", request.search.trim());
-      if (request.metadata === true) url.searchParams.set("metadata", "true");
+      if (request.catalog === true) url.searchParams.set("catalog", "true");
       const response = await fetcher(url, {
         headers: request.codex ? { Originator: "codex" } : undefined,
         signal: request.signal,

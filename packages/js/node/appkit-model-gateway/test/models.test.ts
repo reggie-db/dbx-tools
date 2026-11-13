@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { bundledModelCatalogIndex } from "@dbx-tools/dbx-model-catalog/snapshot";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type { ModelCapabilities, ModelTarget } from "@dbx-tools/shared-model-gateway";
 
@@ -140,25 +141,17 @@ describe("model gateway catalogue", () => {
     assert.equal(codexPayload.models[1]?.supports_search_tool, false);
   });
 
-  it("keeps model metadata opt-in for standard and Codex clients", () => {
-    const model = target("gpt");
+  it("keeps direct catalog records opt-in for standard and Codex clients", () => {
+    const model = catalogTarget("databricks-gpt-5-4");
     const standard = listModelsPayload([model], false);
-    const standardWithMetadata = listModelsPayload(
-      [model],
-      false,
-      false,
-      false,
-      false,
-      false,
-      true,
-    );
+    const standardWithCatalog = listModelsPayload([model], false, false, false, false, false, true);
     const codex = listModelsPayload([model], true);
-    const codexWithMetadata = listModelsPayload([model], true, false, false, false, false, true);
+    const codexWithCatalog = listModelsPayload([model], true, false, false, false, false, true);
 
-    assert.equal(standard.data[0]?.metadata, undefined);
-    assert.equal(codex.models[0]?.metadata, undefined);
-    assert.equal(standardWithMetadata.data[0]?.metadata?.status.deprecated, false);
-    assert.equal(codexWithMetadata.models[0]?.metadata?.status.deprecated, false);
+    assert.equal(standard.data[0]?.catalog, undefined);
+    assert.equal(codex.models[0]?.catalog, undefined);
+    assert.equal(standardWithCatalog.data[0]?.catalog?.id, "databricks-gpt-5-4");
+    assert.equal(codexWithCatalog.models[0]?.catalog?.id, "databricks-gpt-5-4");
   });
 
   it("sorts OpenAI models as major-provider families, other chat, then embeddings", () => {
@@ -209,12 +202,16 @@ describe("model gateway catalogue", () => {
   });
 
   it("omits deprecated models from both catalogue shapes", () => {
+    const catalog = bundledModelCatalogIndex.records.find(
+      (record) => record.status === "deprecated",
+    );
+    assert.ok(catalog);
     const deprecated = {
       ...target("gpt"),
       endpoint: {
-        name: "databricks-gpt-test",
+        name: catalog.id,
         class: ModelClass.ChatBalanced,
-        status: { deprecated: true },
+        catalog,
       },
     } satisfies ModelTarget;
     const openAiPayload = listModelsPayload([deprecated], false);
@@ -236,7 +233,6 @@ function target(family: string, capabilities: Partial<ModelCapabilities> = {}): 
       name: `databricks-${family}-test`,
       family,
       class: ModelClass.ChatBalanced,
-      status: { deprecated: false },
     },
     capabilities: {
       ...CAPABILITIES,
@@ -257,7 +253,6 @@ function named(displayName: string, family: string): ModelTarget {
       name: displayName.toLowerCase(),
       family,
       class: ModelClass.ChatBalanced,
-      status: { deprecated: false },
     },
   };
 }
@@ -273,7 +268,6 @@ function embedding(displayName: string, family: string): ModelTarget {
       name: id,
       family,
       task: "llm/v1/embeddings",
-      status: { deprecated: false },
     },
   };
 }
@@ -286,9 +280,25 @@ function unnamed(displayName: string): ModelTarget {
     displayName,
     endpoint: {
       name: id,
-      status: { deprecated: false },
     },
     capabilities: CAPABILITIES,
     reasoningEfforts: [],
+  };
+}
+
+function catalogTarget(id: string): ModelTarget {
+  const catalog = bundledModelCatalogIndex.records.find((record) => record.id === id);
+  assert.ok(catalog);
+  return {
+    ...target("gpt"),
+    id,
+    aliases: catalog.aliases,
+    displayName: catalog.name,
+    endpoint: {
+      name: id,
+      family: catalog.family,
+      class: ModelClass.ChatBalanced,
+      catalog,
+    },
   };
 }

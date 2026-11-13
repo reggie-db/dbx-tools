@@ -12,7 +12,7 @@ import {
   ModelFamily,
   modelFamily,
   modelFamilyRank,
-  modelMetadataFor,
+  modelCatalogRecordFor,
   versionTuple,
 } from "@dbx-tools/model";
 import { ModelClass, ReasoningEffort } from "@dbx-tools/shared-model";
@@ -55,7 +55,7 @@ export function listModelsPayload(
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
   includeAiDecide?: boolean,
-  includeMetadata?: boolean,
+  includeCatalog?: boolean,
 ): CodexModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -64,7 +64,7 @@ export function listModelsPayload(
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
   includeAiDecide?: boolean,
-  includeMetadata?: boolean,
+  includeCatalog?: boolean,
 ): OpenAIModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -73,7 +73,7 @@ export function listModelsPayload(
   preferSystemModels?: boolean,
   includeSmartRouter?: boolean,
   includeAiDecide?: boolean,
-  includeMetadata?: boolean,
+  includeCatalog?: boolean,
 ): ModelListResponse;
 export function listModelsPayload(
   targets: readonly ModelTarget[],
@@ -82,10 +82,14 @@ export function listModelsPayload(
   preferSystemModels = false,
   includeSmartRouter = false,
   includeAiDecide = false,
-  includeMetadata = false,
+  includeCatalog = false,
 ): ModelListResponse {
   const available = targets
-    .filter((target) => target.endpoint?.status?.deprecated !== true)
+    .filter(
+      (target) =>
+        target.endpoint?.catalog?.status !== "deprecated" &&
+        target.endpoint?.catalog?.status !== "retired",
+    )
     .filter((target) => !includeCodex || hasChatClass(target));
   if (!preserveOrder) {
     available.sort(
@@ -113,18 +117,18 @@ export function listModelsPayload(
               ? CODEX_AI_DECIDE_PRIORITY
               : CODEX_MODEL_PRIORITY_BASE + modelIndex++,
           preferSystemModels,
-          includeMetadata,
+          includeCatalog,
         ),
       ),
     };
   }
   return {
     object: "list",
-    data: available.map((target) => openAiModel(target, includeMetadata)),
+    data: available.map((target) => openAiModel(target, includeCatalog)),
   };
 }
 
-function openAiModel(target: ModelTarget, includeMetadata: boolean): OpenAIModel {
+function openAiModel(target: ModelTarget, includeCatalog: boolean): OpenAIModel {
   return {
     id: target.id,
     object: "model",
@@ -133,8 +137,7 @@ function openAiModel(target: ModelTarget, includeMetadata: boolean): OpenAIModel
     name: target.displayName,
     model_source: target.endpoint?.modelSource ?? "custom",
     task: target.endpoint?.task,
-    status: target.endpoint?.status ?? { deprecated: false },
-    ...(includeMetadata ? { metadata: modelMetadataFor(target.endpoint ?? target.id) } : {}),
+    ...(includeCatalog ? { catalog: modelCatalogRecordFor(target.endpoint ?? target.id) } : {}),
     capabilities: {
       smart_router: target.id === SMART_ROUTER_MODEL_ID,
       ai_decide: target.id === AI_DECIDE_MODEL_ID,
@@ -170,7 +173,6 @@ function aiDecideModelTarget(candidates: readonly ModelTarget[]): ModelTarget {
       task: "llm/v1/chat",
       class: ModelClass.ChatBalanced,
       modelSource: "foundation",
-      status: { deprecated: false },
     },
     capabilities: {
       responses: true,
@@ -211,7 +213,6 @@ function smartRouterModelTarget(candidates: readonly ModelTarget[]): ModelTarget
       task: "llm/v1/chat",
       class: ModelClass.ChatBalanced,
       modelSource: "foundation",
-      status: { deprecated: false },
     },
     capabilities: {
       responses: true,
@@ -247,7 +248,7 @@ function codexModel(
   target: ModelTarget,
   priority: number,
   preferSystemModels: boolean,
-  includeMetadata: boolean,
+  includeCatalog: boolean,
 ): CodexModel {
   const efforts = target.reasoningEfforts;
   return {
@@ -255,8 +256,7 @@ function codexModel(
     display_name: codexDisplayName(target),
     description: target.endpoint?.description ?? "Databricks model service",
     base_instructions: CODEX_BASE_INSTRUCTIONS,
-    status: target.endpoint?.status ?? { deprecated: false },
-    ...(includeMetadata ? { metadata: modelMetadataFor(target.endpoint ?? target.id) } : {}),
+    ...(includeCatalog ? { catalog: modelCatalogRecordFor(target.endpoint ?? target.id) } : {}),
     supported_reasoning_levels: efforts.map((effort) => ({
       effort,
       description: REASONING_DESCRIPTIONS[effort] ?? `Use the ${effort} reasoning budget`,
@@ -276,7 +276,7 @@ function codexModel(
     truncation_policy: { mode: "tokens", limit: 128_000 },
     context_window: null,
     experimental_supported_tools: [],
-    input_modalities: ["text"],
+    input_modalities: target.endpoint?.catalog?.modalities.input ?? ["text"],
     web_search_tool_type: "text",
     supports_search_tool: target.capabilities.webSearch,
     supports_image_detail_original: false,

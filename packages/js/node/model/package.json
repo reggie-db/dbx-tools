@@ -10,7 +10,6 @@
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
-    "metadata": "projen metadata",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
@@ -32,11 +31,7 @@
     "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
-    "@huggingface/hub": "catalog:",
-    "cheerio": "catalog:",
-    "fuse.js": "catalog:",
-    "hyparquet": "catalog:",
-    "zod": "catalog:"
+    "fuse.js": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

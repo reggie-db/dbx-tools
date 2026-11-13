@@ -608,7 +608,13 @@ function isEligibleTarget(
   explicitReasoningEffort: ReasoningEffort | undefined,
   harness: SmartRouterHarness,
 ): boolean {
-  if (!target.endpoint || target.endpoint.status?.deprecated === true) return false;
+  if (
+    !target.endpoint ||
+    target.endpoint.catalog?.status === "deprecated" ||
+    target.endpoint.catalog?.status === "retired"
+  ) {
+    return false;
+  }
   if (!target.modelServiceName?.toLowerCase().startsWith("system.ai.")) return false;
   if (!target.capabilities.chat) return false;
   if (harness === "codex" && !target.capabilities.aiGatewayCodex) return false;

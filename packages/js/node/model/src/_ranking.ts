@@ -17,14 +17,17 @@ import {
   supportsToolsByFamily,
   versionTuple,
 } from "./classify.ts";
-import { modelCapabilitiesFor, modelReasoningLevelsFor } from "./metadata.ts";
+import {
+  modelCatalogPolicyRecordFor,
+  modelCatalogRecordFor,
+  modelReasoningLevelsFor,
+} from "./metadata.ts";
 import {
   isOpenWeightsGpt,
   modelFamily,
   modelReasoningEfforts,
   modelServiceNames,
 } from "./policy.ts";
-import { modelStatusFor } from "./retirement.ts";
 
 type ModelClass = ModelClassType;
 const ModelClass = ModelClassValues;
@@ -76,7 +79,7 @@ export function rankEndpoints(
   if (search && requestedClass === undefined) {
     const classByName = classifyEndpointClasses(normalized);
     for (const endpoint of normalized) {
-      if (!includeDeprecated && endpoint.status?.deprecated) continue;
+      if (!includeDeprecated && isDeprecated(endpoint)) continue;
       const capabilities = endpointCapabilities(endpoint);
       if (!capabilities.chat || (query.requiresTools && !capabilities.tools)) continue;
       if (query.requiresStructuredOutput && !endpoint.supportsStructuredOutput) continue;
@@ -88,7 +91,7 @@ export function rankEndpoints(
   } else {
     for (const modelClass of eligible) {
       for (const endpoint of classified[modelClass]) {
-        if (!includeDeprecated && endpoint.status?.deprecated) continue;
+        if (!includeDeprecated && isDeprecated(endpoint)) continue;
         if (query.requiresTools && !endpointCapabilities(endpoint).tools) continue;
         if (query.requiresStructuredOutput && !endpoint.supportsStructuredOutput) continue;
         candidates.push({ endpoint, modelClass });
@@ -263,8 +266,12 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
     const family =
       foundationModels.map((model) => trimToUndefined(model.model_class)).find(Boolean) ??
       identities.map(modelFamily).find(Boolean);
+    const catalog = identities.map(modelCatalogRecordFor).find(Boolean);
     const publishedReasoning = identities
-      .filter((identity) => modelCapabilitiesFor(identity).reasoning)
+      .filter(
+        (identity) =>
+          modelCatalogPolicyRecordFor(identity)?.capabilities.reasoning?.supported === true,
+      )
       .map((identity) => modelReasoningLevelsFor(identity).map(reasoningEffort));
     const reasoningEfforts =
       [...publishedReasoning, ...identities.map(modelReasoningEfforts)].sort(
@@ -286,16 +293,19 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
         : {}),
       ...(description ? { description } : {}),
       supportsTools:
-        booleanValue(capabilitiesRecord.function_calling) ?? identities.some(supportsToolsByFamily),
+        booleanValue(capabilitiesRecord.function_calling) ??
+        catalog?.capabilities.tools ??
+        identities.some(supportsToolsByFamily),
       supportsStructuredOutput: identities.some(
-        (identity) => modelCapabilitiesFor(identity).structuredOutput,
+        (identity) =>
+          modelCatalogPolicyRecordFor(identity)?.capabilities.structured_output === true,
       ),
       ...(profile ? { profile } : {}),
       modelSource,
       serviceNames: Object.assign({}, ...identities.map(modelServiceNames)),
       ...(modelServiceName ? { modelServiceName } : {}),
       ...(reasoningEfforts.length ? { reasoningEfforts } : {}),
-      status: modelStatusFor(...identities),
+      ...(catalog ? { catalog } : {}),
     };
     return [summary];
   });
@@ -304,6 +314,10 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
     const modelClass = classes.get(summary.name);
     return modelClass ? { ...summary, class: modelClass } : summary;
   });
+}
+
+function isDeprecated(endpoint: ServingEndpointSummary): boolean {
+  return endpoint.catalog?.status === "deprecated" || endpoint.catalog?.status === "retired";
 }
 
 function reasoningEffort(

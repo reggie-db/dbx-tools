@@ -108,7 +108,7 @@ describe("ModelClient", () => {
       authorization: "Bearer token",
       "x-databricks-workspace-id": "123",
     });
-    assert.equal(route.metadata.capabilities.responses, true);
+    assert.equal(route.catalog?.capabilities.responses, true);
     assert.equal(
       (await client.route({ explicit: "bge", protocol: "embeddings" })).url,
       `${HOST}/serving-endpoints/databricks-bge-large-en/invocations`,

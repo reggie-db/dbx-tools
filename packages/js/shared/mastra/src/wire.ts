@@ -31,13 +31,13 @@
  * @module
  */
 
+import { CatalogPriceSchema, type Price } from "@dbx-tools/dbx-model-catalog/browser";
 import {
   type GenieChatEvent,
   GenieChatEventSchema,
   MessageStatusSchema,
 } from "@dbx-tools/shared-genie";
 import {
-  ModelTokenPriceSchema,
   ResolvedModelSelectionSchema,
   ServingEndpointSummarySchema,
 } from "@dbx-tools/shared-model";
@@ -48,6 +48,8 @@ import {
 import { z } from "zod";
 import { FeedbackDestinationsSchema } from "./feedback.ts";
 import { GenieVisualizationModeSchema } from "./genie-visualization.ts";
+
+const CatalogPriceWireSchema = CatalogPriceSchema as unknown as z.ZodType<Price>;
 
 /* ---------------------------- client config ---------------------------- */
 
@@ -617,8 +619,8 @@ export const ModelRoutePartDataSchema = z
     aiDecide: AiDecideObservationSchema.optional().describe(
       "Databricks ai_decide details when the virtual model selected the endpoint.",
     ),
-    pricing: ModelTokenPriceSchema.optional().describe(
-      "Databricks standard list-price row selected for live token-cost estimates.",
+    pricing: CatalogPriceWireSchema.optional().describe(
+      "Catalog-owned Databricks list-price row used for live token-cost estimates.",
     ),
   })
   .strict()

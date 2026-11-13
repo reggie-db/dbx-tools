@@ -1,7 +1,8 @@
 # @dbx-tools/ui
 
 Use this React package for the shared Databricks AppKit UI foundation, branding,
-passwordless authentication, email surfaces, and Databricks AI Search controls.
+passwordless authentication, reusable data tables, email surfaces, and
+Databricks AI Search controls.
 Import only the subpaths that your browser application uses.
 
 ## Foundation
@@ -24,7 +25,7 @@ viewport variables in each browser event snapshot.
 ## Choose a UI package
 
 - Use `@dbx-tools/ui` for common AppKit components, branding, authentication,
-  email, and search. Import its base stylesheet and any feature stylesheet.
+  data tables, email, and search. Import its base stylesheet and any feature stylesheet.
   Authentication components call [@dbx-tools/auth-gate](../../node/auth-gate)
   routes. Search components pair with [@dbx-tools/search](../../node/search)
   and use AppKit's published `aiSearch` client configuration.
@@ -78,6 +79,26 @@ Search components consume
 hook. Backend selection and workspace access remain in
 [@dbx-tools/search](../../node/search).
 
+## Data tables
+
+```tsx
+import { DataTable, type ColumnDef } from "@dbx-tools/ui/table/react";
+import "@dbx-tools/ui/table/styles.css";
+
+const columns: ColumnDef<Row>[] = [
+  { accessorKey: "name", header: "Name" },
+  { accessorKey: "status", header: "Status" },
+];
+
+<DataTable id="jobs" data={rows} columns={columns} />;
+```
+
+`DataTable` uses TanStack Table for persisted sorting, filters, column
+visibility, order, and sizes; lazy-rendered variable-height row scrolling;
+header filters; and accessible row activation. State uses local storage by
+default. Pass `persistence={{ storage: "session" }}` for tab-scoped state or
+`persistence={false}` to disable browser storage.
+
 ## Package exports
 
 - `./react`, `./styles.css`: common AppKit UI foundation.
@@ -85,3 +106,4 @@ hook. Backend selection and workspace access remain in
 - `./auth/react`: passwordless sign-in and passkey management.
 - `./email/react`, `./email/styles.css`: approval, preview, and compose UI.
 - `./search/react`, `./search/styles.css`: Databricks AI Search controls and state.
+- `./table/react`, `./table/styles.css`: reusable persisted and lazy-rendered data table.

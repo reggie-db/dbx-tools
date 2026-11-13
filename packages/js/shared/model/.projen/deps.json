@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/dbx-model-catalog",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"

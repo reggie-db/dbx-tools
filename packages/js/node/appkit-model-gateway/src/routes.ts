@@ -35,7 +35,7 @@ export async function sendModels(
       isCodexRequest(request),
       optionalSearch(request.query.search),
       optionalModelSource(request.query.model_source ?? request.query.modelSource),
-      optionalBoolean(request.query.metadata, "metadata"),
+      optionalBoolean(request.query.catalog, "catalog"),
     );
     response.json(payload);
     logger.debug("models response", {

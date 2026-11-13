@@ -401,7 +401,6 @@ function target(id: string, modelClass: ModelClass, modelServiceName: string): M
       supportsTools: true,
       reasoningEfforts: ["low", "high"],
       modelServiceName,
-      status: { deprecated: false },
     },
     capabilities: CAPABILITIES,
     reasoningEfforts: ["low", "high"],

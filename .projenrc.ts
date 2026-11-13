@@ -97,7 +97,7 @@ const root = new projectJs.DBXToolsNodeProject({
   // Shared dependency versions are known at construction and belong to the
   // native workspace catalog.
   catalog: {
-    "@dbx-tools/dbx-model-catalog": "0.1.7",
+    "@dbx-tools/dbx-model-catalog": "^0.1.9",
     "@types/json-schema": "^7",
     "@types/pg": "^8",
     "@types/semver": "^7.7.1",
@@ -548,7 +548,6 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
 // glue.
 project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => {
   p.package.addField("description", "Workspace-aware Databricks Model Serving selection");
-  projectJs.applyIncludes(p, "scripts/**/*.ts");
   p.addDeps(
     "@dbx-tools/dbx-model-catalog@catalog:",
     "@dbx-tools/cache@workspace:*",
@@ -558,17 +557,8 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/shared-model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
-    "@huggingface/hub@catalog:",
-    "cheerio@catalog:",
     "fuse.js@catalog:",
-    "hyparquet@catalog:",
-    "zod@catalog:",
   );
-  p.addTask("metadata", {
-    exec: "bun scripts/generate-metadata.ts",
-    description:
-      "Refresh model retirement, capability, latency, rating, rate-limit, token-price, and reasoning snapshots",
-  });
 });
 
 // node-model-protocol: AI SDK provider construction plus protocol-level request,
@@ -871,6 +861,7 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
     "zod@catalog:",
   );
   p.addDevDeps(
+    "@dbx-tools/dbx-model-catalog@catalog:",
     "@types/express@catalog:",
     "openai@^6.16.0",
     "vitest@catalog:",
@@ -1019,7 +1010,11 @@ project.applyToProjects(root, { identifierName: "shared-lakebox", tags: "shared"
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
 project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }, (p) => {
   p.package.addField("description", "Browser-safe model selection contract and classifier");
-  p.addDeps("@dbx-tools/shared-core@workspace:*", "zod@catalog:");
+  p.addDeps(
+    "@dbx-tools/dbx-model-catalog@catalog:",
+    "@dbx-tools/shared-core@workspace:*",
+    "zod@catalog:",
+  );
 });
 
 project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "shared" }, (p) => {
@@ -1028,6 +1023,7 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
     "Browser-safe model-gateway schemas and model discovery client",
   );
   p.addDeps(
+    "@dbx-tools/dbx-model-catalog@catalog:",
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
     "zod@catalog:",
@@ -1110,6 +1106,7 @@ project.applyToProjects(root, { identifierName: "shared-search", tags: "shared" 
 project.applyToProjects(root, { identifierName: "shared-mastra", tags: "shared" }, (p) => {
   p.package.addField("description", "Browser-safe contracts for the AppKit Mastra plugin");
   p.addDeps(
+    "@dbx-tools/dbx-model-catalog@catalog:",
     "zod@catalog:",
     "@dbx-tools/shared-genie@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
@@ -1233,7 +1230,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
 project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
   p.package.addField(
     "description",
-    "AppKit React foundation with branding, authentication, email, and search surfaces",
+    "AppKit React foundation with branding, authentication, data tables, email, and search surfaces",
   );
   p.addDeps(
     "@better-auth/passkey@catalog:",
@@ -1244,6 +1241,7 @@ project.applyToProjects(root, { identifierName: "ui", tags: "ui" }, (p) => {
     "@dbx-tools/shared-email@workspace:*",
     "@dbx-tools/shared-email-template@workspace:*",
     "@dbx-tools/shared-search@workspace:*",
+    "@tanstack/react-table@catalog:",
     "lucide-react@catalog:",
     "shiki@catalog:",
     "tailwindcss@catalog:",

@@ -76,6 +76,11 @@
       "type": "runtime"
     },
     {
+      "name": "@tanstack/react-table",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "lucide-react",
       "version": "catalog:",
       "type": "runtime"

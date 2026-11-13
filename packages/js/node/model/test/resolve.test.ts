@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { bundledModelCatalogIndex } from "@dbx-tools/dbx-model-catalog/snapshot";
 import { type ServingEndpointSummary, ModelClass } from "@dbx-tools/shared-model";
 
 import { classifyByFamily } from "../src/classify.ts";
@@ -13,7 +14,6 @@ import {
   type WorkspaceClientLike,
 } from "../src/model-catalog.ts";
 import { selectModel } from "../src/resolve.ts";
-import { modelStatusFor } from "../src/retirement.ts";
 import { lookupModels, resolveModel } from "../src/selection.ts";
 
 const CHAT_TASK = "llm/v1/chat";
@@ -119,11 +119,11 @@ describe("searchServingEndpoints / resolveModelId", () => {
   });
 
   it("keeps later point releases selectable when an earlier release is retired", () => {
-    assert.equal(modelStatusFor("databricks-claude-sonnet-4").deprecated, true);
-    assert.equal(modelStatusFor("databricks-claude-sonnet-4-5").deprecated, false);
-    assert.equal(modelStatusFor("databricks-meta-llama-2-70b-chat").deprecated, true);
-    assert.equal(modelStatusFor("claude-sonnet-4-20250514").deprecated, true);
-    assert.equal(modelStatusFor("claude-sonnet-4-2025-05-14").deprecated, true);
+    const retired = bundledModelCatalogIndex.records.find(
+      (record) => record.status === "deprecated" || record.status === "retired",
+    );
+    assert.ok(retired);
+    assert.deepEqual(lookupModels([{ ...chat(retired.id), catalog: retired }]), []);
     assert.deepEqual(
       resolveModel([chat("databricks-claude-sonnet-4"), chat("databricks-claude-sonnet-4-5")], {
         explicit: "claude sonnet 4 5",
@@ -242,7 +242,7 @@ describe("listServingEndpointsUncached model policy", () => {
           name: "databricks-gemini-3-5-flash",
           family: "gemini",
           reasoningEfforts: ["minimal", "low", "medium", "high"],
-          supportsTools: false,
+          supportsTools: true,
         },
         {
           name: "databricks-gemini-2-5-pro",
@@ -252,35 +252,14 @@ describe("listServingEndpointsUncached model policy", () => {
         },
       ],
     );
-    assert.deepEqual(endpoints[1], {
-      name: "databricks-grok-4-7",
-      displayName: "Grok 4.7",
-      family: "grok",
-      task: CHAT_TASK,
-      description: "xAI reasoning model",
-      modelSource: "foundation",
-      supportsTools: true,
-      supportsStructuredOutput: true,
-      serviceNames: { xai: "grok-4.7" },
-      modelServiceName: "system.ai.databricks-grok-4-7",
-      reasoningEfforts: ["low", "medium", "high", "xhigh"],
-      status: { deprecated: false },
-    });
-    assert.deepEqual(endpoints[3], {
-      name: "databricks-gemini-2-5-pro",
-      displayName: "Gemini Pro",
-      family: "gemini",
-      task: CHAT_TASK,
-      supportsTools: false,
-      supportsStructuredOutput: true,
-      profile: { quality: 5, speed: 3, cost: 2 },
-      modelSource: "foundation",
-      class: ModelClass.ChatThinking,
-      serviceNames: { google: "gemini-2.5-pro" },
-      modelServiceName: "system.ai.gemini-2-5-pro",
-      reasoningEfforts: ["minimal", "low", "medium", "high"],
-      status: { deprecated: true },
-    });
+    assert.equal(endpoints[1]?.name, "databricks-grok-4-7");
+    assert.equal(endpoints[1]?.catalog?.id, "databricks-grok-4-7");
+    assert.equal(endpoints[1]?.supportsStructuredOutput, true);
+    assert.deepEqual(endpoints[1]?.reasoningEfforts, ["low", "medium", "high", "xhigh"]);
+    assert.equal(endpoints[3]?.name, "databricks-gemini-2-5-pro");
+    assert.equal(endpoints[3]?.catalog?.id, "databricks-gemini-2-5-pro");
+    assert.equal(endpoints[3]?.catalog?.status, "retired");
+    assert.equal(endpoints[3]?.class, ModelClass.ChatThinking);
   });
 });
 
@@ -865,7 +844,7 @@ describe("selectModel", () => {
     const client = {
       servingEndpoints: {
         async *list() {
-          yield { name: "databricks-gemini-3-5-flash", task: CHAT_TASK };
+          yield { name: "custom-no-tools", task: CHAT_TASK };
         },
       },
     } as WorkspaceClientLike;
@@ -873,7 +852,7 @@ describe("selectModel", () => {
     await assert.rejects(
       () =>
         selectModel(client, `https://tools-${Date.now()}.example.com`, {
-          explicit: "databricks-gemini-3-5-flash",
+          explicit: "custom-no-tools",
           fuzzy: false,
           requiresTools: true,
         }),

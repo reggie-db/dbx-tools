@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/ui",
-  "description": "AppKit React foundation with branding, authentication, email, and search surfaces",
+  "description": "AppKit React foundation with branding, authentication, data tables, email, and search surfaces",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -37,6 +37,7 @@
     "@dbx-tools/shared-email": "workspace:*",
     "@dbx-tools/shared-email-template": "workspace:*",
     "@dbx-tools/shared-search": "workspace:*",
+    "@tanstack/react-table": "catalog:",
     "lucide-react": "catalog:",
     "shiki": "catalog:",
     "streamdown": "catalog:",
@@ -64,8 +65,10 @@
     "./email/react": "./index.email.react.ts",
     "./react": "./index.react.ts",
     "./search/react": "./index.search.react.ts",
+    "./table/react": "./index.table.react.ts",
     "./styles.css": "./src/styles.css",
     "./email/styles.css": "./src/email/styles.css",
+    "./table/styles.css": "./src/table/styles.css",
     "./search/styles.css": "./src/search/styles.css",
     "./branding/styles.css": "./src/branding/styles.css",
     "./branding/brand-bridge.css": "./src/branding/brand-bridge.css",

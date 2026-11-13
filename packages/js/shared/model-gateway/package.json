@@ -22,6 +22,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/dbx-model-catalog": "catalog:",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
     "zod": "catalog:"

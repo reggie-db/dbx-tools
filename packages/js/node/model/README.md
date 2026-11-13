@@ -35,8 +35,7 @@ Browser-safe request/result schemas and endpoint classification types live in
 The package:
 
 - Lists Databricks Model Serving endpoints through the SDK and normalizes them
-  into a stable summary shape with TypeScript-owned family and reasoning-effort
-  metadata.
+  into a stable summary shape augmented with the matching direct catalog record.
 - Classifies endpoints into chat-thinking, chat-balanced, chat-fast, and
   embedding classes using Foundation Model API scores and family heuristics.
 - Resolves loose user input such as `"sonnet"` or `"chat fast"` to a concrete
@@ -52,14 +51,12 @@ The package:
   and re-lists once on a resolve miss so a newly deployed model still resolves.
 - Builds the invocations URL and mints per-request auth headers for callers that
   issue their own OpenAI-shaped HTTP requests.
-- Provides public-catalog retirement, Responses, image-input, apply-patch,
-  web-search, reasoning, tool-calling, structured-output, temperature-support,
-  latency, human-preference rating, ITPM, OTPM, QPH, and token-price metadata
-  through cached in-process lookups. `@dbx-tools/dbx-model-catalog` supplies a
-  bundled offline snapshot and an explicit refresh from public documentation
-  and public datasets. The catalog does not authenticate to Databricks or
-  inspect a workspace. Live workspace discovery in this package remains the
-  source of truth for endpoint availability and runtime capabilities.
+- Returns direct `@dbx-tools/dbx-model-catalog` records for lifecycle,
+  documented capabilities, modalities, reasoning, latency, rankings, rate
+  limits, and pricing. The catalog supplies its generated contracts, bundled
+  offline snapshot, and public refresh client. Live workspace discovery in this
+  package remains the source of truth for endpoint availability and runtime
+  capabilities.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
@@ -110,7 +107,7 @@ const response = await fetch(route.url, {
 It lists and normalizes endpoints, caches one
 catalogue per host, workspace ID, and principal, refreshes once after an
 unmatched fuzzy request, resolves routes, returns complete authentication
-headers, exposes profiles, and returns the package's public catalog metadata. Its
+headers, exposes profiles, and returns the matching direct catalog record. Its
 portable `@dbx-tools/model/python` entrypoint excludes the AppKit catalogue
 wrapper while reusing the same pure ranking and policy implementation.
 
@@ -278,61 +275,51 @@ tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
 The TypeScript helper applies this policy so every Node consumer shares one version
 threshold without loading a native library.
 
-## Read published model metadata
+## Read published catalog records
 
 ```ts
-import { metadata } from "@dbx-tools/model";
+import {
+  estimateModelTokenPrice,
+  modelCatalogRecordFor,
+  modelLatencyFor,
+  modelRankingsFor,
+  modelRateLimitsFor,
+} from "@dbx-tools/model";
 
-const capabilities = metadata.modelCapabilitiesFor("databricks-gpt-5-4");
-const latencyScore = metadata.modelLatencyScoreFor("databricks-gpt-6-luna");
-const rating = metadata.modelRatingFor("databricks-gpt-6-sol");
-const limits = metadata.modelRateLimitsFor("gpt-5.4");
-const prices = metadata.modelTokenPricesFor("system.ai.gpt-5-4");
-const estimate = metadata.estimateModelTokenPrice(
+const record = modelCatalogRecordFor("databricks-gpt-5-4");
+const limits = modelRateLimitsFor("gpt-5.4");
+const latency = modelLatencyFor("databricks-gpt-6-luna");
+const rankings = modelRankingsFor("databricks-gpt-6-sol");
+const estimate = estimateModelTokenPrice(
   "databricks-gpt-5-4",
   { inputTokens: 1_000_000, outputTokens: 500_000 },
   { condition: "short-context", usdPerDbu: 0.07 },
 );
-const status = metadata.modelStatusFor("system.ai.gemini-2-5-pro");
 
-latencyScore?.score;
-latencyScore?.measurements.outputTokensPerSecond;
-rating?.score;
-rating?.rankings.text_style_control?.lowerBound;
+record?.capabilities.responses;
+record?.status;
+latency?.score;
+latency?.measurements.output_tokens_per_second;
+rankings?.[0]?.rank;
+limits?.itpm;
 ```
 
 The package loads the bundled `@dbx-tools/dbx-model-catalog` snapshot
-synchronously. `refreshModelMetadata()` downloads the current catalog and search
+synchronously. `refreshModelCatalog()` downloads the current catalog and search
 index from their public publication URLs. Neither path uses Databricks
 credentials, workspace APIs, customer data, Python, Pyfig, or Pynect. Runtime
 calls normalize endpoint, display, foundation-model, and provider identities
-into memoized sets and maps. `modelMetadataFor()` returns status, capabilities,
-normalized latency metadata, Arena ratings, published limits, and Databricks DBU
-rates per million input, output, cache-read, and cache-write tokens together for
-a string or `ServingEndpointSummary`.
+into memoized catalog indexes. `modelCatalogRecordFor()` returns the generated
+catalog contract without translating it into a dbx-tools-owned shape. Field
+helpers return the same nested catalog values. `modelCatalogPolicyRecordFor()`
+may use a prior same-family record only for local newer-version routing policy;
+it does not change the direct lookup result.
 
-The existing metadata contracts, parser exports, and generation task remain
-available for compatibility. Runtime metadata uses the catalog first. The
-committed models.dev capability snapshot fills fields that are absent from a
-historical catalog record, without overriding an explicit catalog value.
-
-`latencyScore.score` is the benchmark's median
-normalized response time in milliseconds, so lower values are faster.
-`latencyScore.measurements` retains median time to first token, median output
-throughput, successful run count, normalized completion length, and measurement
-time. `rating.score` is a 0-100 mean percentile across the model's available
-LMArena configurations, so higher values are better even when source scales
-differ. `rating.rankings` preserves each source score, lower and upper confidence
-bounds, rank, publication date, preference votes and variance, or agent
-observation and session counts.
-
-When Arena lists multiple reasoning-effort
-variants, each configuration keeps its highest-rated overall row. Lookups prefer
-an exact model match and otherwise inherit from the newest measured model in the
-same family and variant. Consumers can sort the root scores directly or apply
-their own confidence, freshness, and coverage policy to the nested values.
-Multiply token rates by the applicable Databricks SKU price per DBU to estimate
-currency cost.
+`latency.score` is the catalog's normalized response time in milliseconds, so
+lower values are faster. `rankings` preserves each published source ranking,
+metric, confidence bounds, observations, variant, and source links. Token-price
+estimation reads the catalog's `average_price.DBU.rates` directly and applies
+the caller's DBU-to-currency conversion when supplied.
 
 Native web-search capability starts with the documented model set. Later
 versions in the same hosted foundation-model family inherit the capability by
@@ -340,9 +327,9 @@ versions in the same hosted foundation-model family inherit the capability by
 external endpoint names also don't inherit because digits in those names aren't
 treated as model versions.
 
-The model gateway can override a discovered capability for routing and model
-catalogues. Use that gateway override to disable web search when a workspace
-route doesn't support a capability that metadata would otherwise advertise.
+The model gateway can override a discovered capability for routing. Use that
+override to disable web search when a workspace route does not support a
+capability documented by the catalog.
 
 ## Use static fallbacks
 
@@ -366,10 +353,10 @@ policy decisions. Use fallbacks only when live resolution is unavailable.
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
-- `metadata` - public catalog metadata, locally learned reasoning ladders, and
-  cached normalized lookups.
+- `metadata` - direct public catalog lookup, catalog refresh, local
+  newer-version policy, and locally learned reasoning ladders.
 - `modelClient` - portable authentication-aware discovery, selection, routing,
-  profile, and metadata facade.
+  profile, and catalog facade.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
 - `policy` - family, serving-protocol, tool, and reasoning-effort policy.
 - `fallback` - static fallback model ids per class.

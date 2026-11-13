@@ -166,11 +166,9 @@ discovered value.
 `client_version` query parameter. Codex slugs prefer fully qualified Databricks
 model service names.
 
-Add `metadata=true` to either the standard or Codex request to include the
-optional dbx-tools metadata object on each model. Its latency and rating fields
-each expose a root sortable score plus nested measurements or source rankings.
-The default response omits the field so existing OpenAI and Codex clients keep
-their current payload shape.
+Add `catalog=true` to either the standard or Codex request to include the
+optional direct `@dbx-tools/dbx-model-catalog` record on each matched model.
+The default response omits the field.
 
 Codex merges provider models with its bundled catalogue. The gateway reserves a
 separate provider priority range so bundled recommendations remain together,

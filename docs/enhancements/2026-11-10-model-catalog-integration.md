@@ -8,8 +8,8 @@ Status: Implemented in source; pending the next dbx-tools release
 
 `@dbx-tools/model` now consumes `@dbx-tools/dbx-model-catalog` for public model
 metadata. The catalog replaces the runtime documentation and dataset parsing in
-`@dbx-tools/model` while preserving its public lookup APIs and workspace-aware
-selection behavior.
+`@dbx-tools/model`. Consumers now use the catalog's generated record contracts
+directly; workspace-aware selection remains owned by `@dbx-tools/model`.
 
 The catalog reads public documentation and public datasets only. It does not
 authenticate to Databricks, call workspace APIs, inspect customer resources, or
@@ -57,18 +57,13 @@ Databricks lookup even when public documentation has not added it yet.
 | Databricks rate-limit parser                                | `rate_limits`                                             |
 | Databricks pricing parser                                   | `average_price.DBU.rates`                                 |
 | Public latency benchmark parser                             | `latency`                                                 |
-| LMArena dataset loader and percentile conversion            | `rankings` adapted to the existing `ModelRating` contract |
+| LMArena dataset loader and percentile conversion            | direct `rankings` records                                 |
 
-`metadataFromCatalog()` is a private adapter. It converts catalog records into
-the established `@dbx-tools/model` metadata maps, so existing callers continue
-to use `modelCapabilitiesFor()`, `modelRateLimitsFor()`,
-`modelTokenPricesFor()`, `modelLatencyScoreFor()`, `modelRatingFor()`,
-`modelReasoningLevelsFor()`, and `modelMetadataFor()`.
-
-The existing parser and contract exports remain available for compatibility in
-this release. Runtime lookups no longer invoke those parsers. The committed
-models.dev snapshot fills a capability only when a historical catalog record
-does not publish that field; an explicit catalog value takes precedence.
+The local parsers, generated snapshots, mirror schemas, and compatibility
+adapters were removed. `modelCatalogRecordFor()` returns `CatalogModelRecord`
+directly. Narrow helpers such as `modelRateLimitsFor()`, `modelLatencyFor()`,
+and `modelRankingsFor()` return fields from that record without translating the
+shape. Pricing uses the catalog-owned average-price contract.
 
 ## Workspace lookup hook
 
@@ -82,9 +77,9 @@ its public-only boundary. The hook remains the existing
    identity;
 4. retain unmatched live endpoints.
 
-Consumers that already own a live lookup can use the catalog's pure
-`enrichLiveModels()` helper. The caller supplies the live records and identity
-selector; the helper performs no network or workspace operation.
+The matched `CatalogModelRecord` is attached to the live
+`ServingEndpointSummary.catalog` field. Unpublished custom endpoints keep that
+field unset.
 
 ## Runtime and language boundaries
 
@@ -97,22 +92,24 @@ filtered content for the shared contract.
 default Node client for explicit public refreshes. It does not import the
 Pynect adapter.
 
-## Compatibility and release
+## Release
 
-The integration depends on `@dbx-tools/dbx-model-catalog@0.1.7`. The catalog
+The integration depends on `@dbx-tools/dbx-model-catalog@^0.1.9`. The catalog
 release includes schema v16, 94 records, the bundled search index, Node/Python
 filter parity coverage, the optional Pynect demo integration, and a
 bundler-safe inlined snapshot for PythonMonkey and other single-file consumers.
 
-The following `@dbx-tools/model` behavior remains unchanged:
+The following `@dbx-tools/model` behavior remains owned locally:
 
-- public metadata lookup function names and return shapes;
 - live endpoint discovery, cache isolation, and refresh-on-miss behavior;
 - unknown endpoint handling;
 - exact endpoint and `system.ai.*` routing;
 - model class ceilings and fallback policy;
 - reasoning request and error adaptation;
 - token-price estimation.
+
+The removed metadata facade, local contract exports, and generated parser task
+are intentional breaking changes.
 
 ## Validation
 

@@ -88,7 +88,6 @@ export const SMART_ROUTER_ENDPOINT: ServingEndpointSummary = {
   displayName: "Smart Router",
   description: "Selects a Databricks system model with the task_v3 Smart Router.",
   task: "llm/v1/chat",
-  status: { deprecated: false },
   modelSource: "foundation",
 };
 
@@ -98,7 +97,6 @@ export const AI_DECIDE_ENDPOINT: ServingEndpointSummary = {
   displayName: "AI Decide",
   description: "Selects a sufficient foundation model using Databricks ai_decide.",
   task: "llm/v1/chat",
-  status: { deprecated: false },
   modelSource: "foundation",
 };
 

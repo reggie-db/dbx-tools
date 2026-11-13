@@ -5,12 +5,14 @@
  */
 
 import {
-  ModelMetadataSchema,
-  ReasoningEffortSchema,
-  ModelSourceSchema,
-  ModelStatusSchema,
-} from "@dbx-tools/shared-model";
+  CatalogModelRecordSchema,
+  type CatalogModelRecord,
+} from "@dbx-tools/dbx-model-catalog/browser";
+import { ReasoningEffortSchema, ModelSourceSchema } from "@dbx-tools/shared-model";
 import { z } from "zod";
+
+const CatalogModelRecordWireSchema =
+  CatalogModelRecordSchema as unknown as z.ZodType<CatalogModelRecord>;
 
 /** Capabilities published with an OpenAI-compatible model entry. */
 export const OpenAIModelCapabilitiesSchema = z.object({
@@ -40,10 +42,9 @@ export const OpenAIModelSchema = z.object({
   name: z.string().min(1),
   model_source: ModelSourceSchema.describe("API-derived foundation or custom model source."),
   task: z.string().optional(),
-  status: ModelStatusSchema,
   capabilities: OpenAIModelCapabilitiesSchema,
-  metadata: ModelMetadataSchema.optional().describe(
-    "Optional dbx-tools metadata requested with metadata=true.",
+  catalog: CatalogModelRecordWireSchema.optional().describe(
+    "Optional direct model-catalog record requested with catalog=true.",
   ),
 });
 /** One OpenAI-compatible model-list entry. */
@@ -79,7 +80,6 @@ export const CodexModelSchema = z.object({
   display_name: z.string().min(1),
   description: z.string(),
   base_instructions: z.string(),
-  status: ModelStatusSchema,
   supported_reasoning_levels: z.array(CodexReasoningLevelSchema),
   default_reasoning_level: ReasoningEffortSchema.optional(),
   shell_type: z.string().min(1),
@@ -98,8 +98,8 @@ export const CodexModelSchema = z.object({
   web_search_tool_type: z.string(),
   supports_search_tool: z.boolean(),
   supports_image_detail_original: z.boolean(),
-  metadata: ModelMetadataSchema.optional().describe(
-    "Optional dbx-tools metadata requested with metadata=true.",
+  catalog: CatalogModelRecordWireSchema.optional().describe(
+    "Optional direct model-catalog record requested with catalog=true.",
   ),
 });
 /** One Codex model-catalog entry. */

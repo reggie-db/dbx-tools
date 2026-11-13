@@ -24,7 +24,7 @@
  */
 
 import { ValidationError } from "@databricks/appkit";
-import { metadata, policy } from "@dbx-tools/model";
+import { modelCatalogPolicyRecordFor, policy } from "@dbx-tools/model";
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { z } from "zod";
 
@@ -78,7 +78,7 @@ export function supportsWebSearch(model: string | ServingEndpointSummary): boole
   const identity = typeof model === "string" ? model : (model.modelServiceName ?? model.name);
   return (
     webSearchProviderForFamily(policy.modelFamily(identity)) !== null &&
-    metadata.modelCapabilitiesFor(model).webSearch
+    modelCatalogPolicyRecordFor(model)?.capabilities.web_search === true
   );
 }
 

@@ -263,8 +263,8 @@ describe("ModelGateway request sanitization", () => {
     assert.equal(adaptInferenceTemperature("databricks-gpt-5-4", supported), supported);
   });
 
-  it("omits unsupported temperature and preserves unknown custom models", () => {
-    assert.deepEqual(adaptInferenceTemperature("databricks-gpt-5-5", { temperature: 1 }), {});
+  it("omits catalog-unsupported temperature and preserves unknown custom models", () => {
+    assert.deepEqual(adaptInferenceTemperature("databricks-gpt-5-5-pro", { temperature: 1 }), {});
     const custom = { temperature: 3 };
     const omitted = { model: "custom-model" };
     assert.equal(adaptInferenceTemperature("custom-model", custom), custom);
@@ -282,7 +282,6 @@ function embeddingTarget(): ModelTarget {
       task: "llm/v1/embeddings",
       class: "embedding",
       modelSource: "foundation",
-      status: { deprecated: false },
     },
     capabilities: {
       responses: false,
@@ -315,7 +314,6 @@ function chatTarget(): ModelTarget {
       task: "llm/v1/chat",
       class: "chat-balanced",
       modelSource: "foundation",
-      status: { deprecated: false },
     },
     capabilities: {
       responses: true,

@@ -8,8 +8,14 @@
  * @module
  */
 
-import { CloudProvider, toDate } from "@dbx-tools/shared-core";
+import {
+  CatalogModelRecordSchema,
+  type CatalogModelRecord,
+} from "@dbx-tools/dbx-model-catalog/browser";
 import { z } from "zod";
+
+const CatalogModelRecordWireSchema =
+  CatalogModelRecordSchema as unknown as z.ZodType<CatalogModelRecord>;
 
 export const ModelClassSchema = z
   .enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"])
@@ -30,112 +36,6 @@ export const ModelOptimizationSchema = z
   .describe("Primary endpoint profile dimension used for automatic model ranking.");
 
 export type ModelOptimization = z.infer<typeof ModelOptimizationSchema>;
-
-const ModelMetadataTimestampSchema = z.preprocess(
-  (value) => toDate(value, { parseDuration: false })?.toISOString() ?? value,
-  z.iso.datetime(),
-);
-
-export const ModelLatencyMeasurementsSchema = z
-  .object({
-    timeToFirstTokenMs: z
-      .number()
-      .finite()
-      .nonnegative()
-      .describe("Median measured time to first output token in milliseconds."),
-    outputTokensPerSecond: z
-      .number()
-      .finite()
-      .positive()
-      .describe("Median measured output-token throughput per second."),
-    successfulRunCount: z
-      .number()
-      .int()
-      .positive()
-      .describe("Total successful benchmark runs represented by the measurements."),
-    completionTokenCount: z
-      .number()
-      .int()
-      .positive()
-      .describe("Completion-token count used to normalize the latency score."),
-    measuredAt: ModelMetadataTimestampSchema.describe(
-      "Benchmark measurement time normalized to an ISO 8601 UTC timestamp.",
-    ),
-  })
-  .describe("Sortable benchmark measurements underlying one normalized latency score.");
-
-export type ModelLatencyMeasurements = z.infer<typeof ModelLatencyMeasurementsSchema>;
-
-export const ModelLatencyScoreSchema = z
-  .object({
-    score: z
-      .number()
-      .finite()
-      .positive()
-      .describe("Normalized response time in milliseconds; lower values are faster."),
-    measurements: ModelLatencyMeasurementsSchema.describe(
-      "Benchmark components retained for consumer-defined sorting and filtering.",
-    ),
-  })
-  .describe("Normalized latency score and its underlying benchmark measurements.");
-
-export type ModelLatencyScore = z.infer<typeof ModelLatencyScoreSchema>;
-
-export const ModelRankingSchema = z
-  .object({
-    score: z.number().finite().describe("Published human-preference rating; higher is better."),
-    lowerBound: z.number().finite().describe("Published lower confidence bound for the rating."),
-    upperBound: z.number().finite().describe("Published upper confidence bound for the rating."),
-    variance: z
-      .number()
-      .finite()
-      .nonnegative()
-      .optional()
-      .describe("Published rating variance when the ranking uses preference votes."),
-    voteCount: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe("Number of preference votes when published by the ranking."),
-    observationCount: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe("Number of agent observations when published by the ranking."),
-    sessionCount: z
-      .number()
-      .int()
-      .nonnegative()
-      .optional()
-      .describe("Number of agent sessions when published by the ranking."),
-    rank: z.number().int().positive().describe("Published leaderboard rank; lower is better."),
-    publishedAt: ModelMetadataTimestampSchema.describe(
-      "Leaderboard publication time normalized to an ISO 8601 UTC timestamp.",
-    ),
-  })
-  .describe("Sortable metrics for one LMArena leaderboard configuration.");
-
-export type ModelRanking = z.infer<typeof ModelRankingSchema>;
-
-export const ModelRatingSchema = z
-  .object({
-    score: z
-      .number()
-      .finite()
-      .min(0)
-      .max(100)
-      .describe(
-        "Mean percentile rank across available LMArena configurations; higher values are better.",
-      ),
-    rankings: z
-      .record(z.string().min(1), ModelRankingSchema)
-      .describe("Source rankings keyed by LMArena dataset configuration name."),
-  })
-  .describe("Aggregate quality score and source-specific LMArena rankings.");
-
-export type ModelRating = z.infer<typeof ModelRatingSchema>;
 
 export const ReasoningEffortSchema = z
   .enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"])
@@ -175,17 +75,6 @@ export const ModelSourceSchema = z
 
 export type ModelSource = z.infer<typeof ModelSourceSchema>;
 
-export const ModelStatusSchema = z
-  .object({
-    deprecated: z
-      .boolean()
-      .default(false)
-      .describe("True when the model should no longer be selected by default."),
-  })
-  .describe("Model retirement status.");
-
-export type ModelStatus = z.infer<typeof ModelStatusSchema>;
-
 export const ServingEndpointSummarySchema = z
   .object({
     name: z.string().describe("Serving endpoint invoke id."),
@@ -222,7 +111,9 @@ export const ServingEndpointSummarySchema = z
       .array(ReasoningEffortSchema)
       .optional()
       .describe("Reasoning effort values this endpoint accepts."),
-    status: ModelStatusSchema.optional().describe("Retirement status for this endpoint."),
+    catalog: CatalogModelRecordWireSchema.optional().describe(
+      "Public model-catalog record matched to this live serving endpoint.",
+    ),
     dimension: z
       .number()
       .optional()
@@ -328,130 +219,6 @@ export const FamilyClassSchema = z
   .describe("Fallback class and rank for an unscored recognized model family.");
 
 export type FamilyClass = z.infer<typeof FamilyClassSchema>;
-
-export const ModelCapabilitiesSchema = z
-  .object({
-    responses: z.boolean().describe("True when the model supports the Responses API."),
-    imageInput: z.boolean().describe("True when the model accepts image inputs."),
-    applyPatch: z.boolean().describe("True when the model supports the apply-patch tool."),
-    webSearch: z.boolean().describe("True when the model supports web search."),
-    reasoning: z.boolean().describe("True when the model supports explicit reasoning controls."),
-    tools: z.boolean().describe("True when the model supports tool calling."),
-    structuredOutput: z.boolean().describe("True when the model supports structured output."),
-    temperature: z.boolean().describe("True when the model accepts temperature sampling."),
-  })
-  .describe("Published capabilities resolved for one model identity.");
-
-export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
-
-export const ModelRateLimitsSchema = z
-  .object({
-    inputTokensPerMinute: z
-      .number()
-      .int()
-      .min(0)
-      .nullable()
-      .describe("Published input tokens per minute, or null when unpublished."),
-    outputTokensPerMinute: z
-      .number()
-      .int()
-      .min(0)
-      .nullable()
-      .describe("Published output tokens per minute, or null when unpublished."),
-    queriesPerHour: z
-      .number()
-      .int()
-      .min(0)
-      .nullable()
-      .describe("Published queries per hour, or null when unpublished."),
-  })
-  .describe("Published pay-per-token limits for one model.");
-
-export type ModelRateLimits = z.infer<typeof ModelRateLimitsSchema>;
-
-export const ModelTokenPriceTierSchema = z
-  .enum(["standard", "priority"])
-  .describe("Databricks pay-per-token service tier.");
-
-export type ModelTokenPriceTier = z.infer<typeof ModelTokenPriceTierSchema>;
-
-export const ModelTokenPriceConditionSchema = z
-  .enum(["default", "short-context", "long-context", "text-tokens", "image-tokens", "audio-tokens"])
-  .describe("Documented context or modality condition for one token price row.");
-
-export type ModelTokenPriceCondition = z.infer<typeof ModelTokenPriceConditionSchema>;
-
-export const ModelTokenUsdPerDbuSchema = z
-  .record(
-    z.nativeEnum(CloudProvider),
-    z.number().min(0).describe("Databricks list price in USD for one DBU."),
-  )
-  .describe("Databricks USD-per-DBU list prices keyed by cloud provider.");
-
-export type ModelTokenUsdPerDbu = z.infer<typeof ModelTokenUsdPerDbuSchema>;
-
-export const ModelTokenPriceSchema = z
-  .object({
-    tier: ModelTokenPriceTierSchema.describe("Databricks pay-per-token service tier."),
-    condition: ModelTokenPriceConditionSchema.describe(
-      "Context or modality condition for this price row.",
-    ),
-    inputDbuPerMillionTokens: z
-      .number()
-      .min(0)
-      .nullable()
-      .describe("Input DBUs per million tokens, or null when unavailable."),
-    outputDbuPerMillionTokens: z
-      .number()
-      .min(0)
-      .nullable()
-      .describe("Output DBUs per million tokens, or null when unavailable."),
-    cacheReadDbuPerMillionTokens: z
-      .number()
-      .min(0)
-      .nullable()
-      .describe("Cache-read DBUs per million tokens, or null when unavailable."),
-    cacheWriteDbuPerMillionTokens: z
-      .number()
-      .min(0)
-      .nullable()
-      .describe("Cache-write DBUs per million tokens, or null when unavailable."),
-    cacheWriteOneHourDbuPerMillionTokens: z
-      .number()
-      .min(0)
-      .nullable()
-      .describe("One-hour cache-write DBUs per million tokens, or null when unavailable."),
-    usdPerDbu: ModelTokenUsdPerDbuSchema.optional().describe(
-      "Databricks USD-per-DBU list prices for the calculator's default region in each cloud.",
-    ),
-  })
-  .describe("Databricks DBU token rates and cloud list prices for one token condition.");
-
-export type ModelTokenPrice = z.infer<typeof ModelTokenPriceSchema>;
-
-export const ModelMetadataSchema = z
-  .object({
-    status: ModelStatusSchema.describe("Retirement status for this model identity."),
-    capabilities: ModelCapabilitiesSchema.describe(
-      "Published capabilities for this model identity.",
-    ),
-    latencyScore: ModelLatencyScoreSchema.optional().describe(
-      "Normalized latency score and benchmark measurements from the committed snapshot.",
-    ),
-    rating: ModelRatingSchema.optional().describe(
-      "Aggregate quality score and LMArena rankings when available.",
-    ),
-    rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available."),
-    tokenPrices: z
-      .array(ModelTokenPriceSchema)
-      .optional()
-      .describe("Databricks list-price token rates when available."),
-  })
-  .describe(
-    "Combined retirement, capability, latency-score, rating, rate-limit, and token-price metadata.",
-  );
-
-export type ModelMetadata = z.infer<typeof ModelMetadataSchema>;
 
 export const ResolvedModelSchema = z
   .object({

@@ -20,7 +20,7 @@ describe("model gateway Express lifecycle", () => {
     assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()), { ready: true });
   });
 
-  it("forwards the model metadata opt-in without changing the default", async () => {
+  it("forwards the model catalog opt-in without changing the default", async () => {
     const calls: unknown[][] = [];
     const gateway = {
       async models(...args: unknown[]) {
@@ -32,7 +32,7 @@ describe("model gateway Express lifecycle", () => {
 
     await sendModels(
       gateway,
-      new MockRequest({ metadata: "true" }) as unknown as express.Request,
+      new MockRequest({ catalog: "true" }) as unknown as express.Request,
       response as unknown as express.Response,
     );
 

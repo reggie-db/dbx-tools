@@ -6,7 +6,7 @@
 
 import { getExecutionContext, type WorkspaceClient } from "@databricks/appkit";
 import {
-  metadata,
+  modelCatalogPolicyRecordFor,
   modelCatalog,
   policy,
   selection,
@@ -185,14 +185,15 @@ export class DatabricksModelRegistry implements ModelRegistry {
   }
 
   private target(endpoint: ServingEndpointSummary): ModelTarget {
-    const published = metadata.modelCapabilitiesFor(endpoint);
+    const published = modelCatalogPolicyRecordFor(endpoint);
+    const catalogCapabilities = published?.capabilities;
     const family = endpoint.family?.toLowerCase();
     const openAiFamily = family === "gpt" || family === "openai" || endpoint.name.includes("codex");
     const modelServiceName = policy.modelServiceName(endpoint.modelServiceName);
     const embeddings =
       endpoint.class === ModelClass.Embedding || endpoint.task === "llm/v1/embeddings";
     const capabilities: ModelCapabilities = {
-      responses: !embeddings && (openAiFamily || published.responses),
+      responses: !embeddings && (openAiFamily || catalogCapabilities?.responses === true),
       openResponses: !embeddings && !openAiFamily,
       chat: !embeddings,
       anthropic: family === "claude",
@@ -200,14 +201,16 @@ export class DatabricksModelRegistry implements ModelRegistry {
       aiGatewayCodex:
         !embeddings && Boolean(modelServiceName) && family !== "claude" && family !== "gemini",
       tools: endpoint.supportsTools === true,
-      reasoning: Boolean(endpoint.reasoningEfforts?.length) || published.reasoning,
+      reasoning:
+        Boolean(endpoint.reasoningEfforts?.length) ||
+        catalogCapabilities?.reasoning?.supported === true,
       streaming: true,
       parallelTools: endpoint.supportsTools === true,
-      customTools: published.applyPatch || endpoint.name.includes("codex"),
+      customTools: catalogCapabilities?.apply_patch === true || endpoint.name.includes("codex"),
       structuredOutput: true,
-      webSearch: published.webSearch,
-      imageInput: published.imageInput,
-      applyPatch: published.applyPatch,
+      webSearch: catalogCapabilities?.web_search === true,
+      imageInput: published?.modalities.input.includes("image") === true,
+      applyPatch: catalogCapabilities?.apply_patch === true,
     };
     const aliases = new Set(
       [

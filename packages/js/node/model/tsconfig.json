@@ -39,7 +39,6 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "index.*.ts",
-    "scripts/**/*.ts",
     "index*.ts"
   ],
   "exclude": [

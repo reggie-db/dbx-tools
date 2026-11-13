@@ -6,7 +6,6 @@
 
 import { policy } from "@dbx-tools/model";
 import { isRecord } from "@dbx-tools/shared-core";
-import type express from "express";
 import type {
   GatewayRoute,
   ModelTarget,
@@ -14,6 +13,7 @@ import type {
   ResolveRouteInput,
   UpstreamProtocol,
 } from "@dbx-tools/shared-model-gateway";
+import type express from "express";
 
 /** Error returned when preserving a requested protocol feature is impossible. */
 export class UnsupportedGatewayFeatureError extends Error {

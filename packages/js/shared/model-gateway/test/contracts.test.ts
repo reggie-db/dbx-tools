@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { bundledModelCatalogIndex } from "@dbx-tools/dbx-model-catalog/snapshot";
 
 import {
   ClientProtocolSchema,
@@ -38,6 +39,10 @@ const CAPABILITIES = {
   imageInput: true,
   applyPatch: true,
 };
+
+const CATALOG_RECORD = bundledModelCatalogIndex.records.find(
+  (record) => record.id === "databricks-gpt-5-4",
+);
 
 describe("shared model-gateway schemas", () => {
   it("reuses route-option validation while preserving additive selection fields", () => {
@@ -124,6 +129,7 @@ describe("shared model-gateway schemas", () => {
   });
 
   it("validates OpenAI and Codex model catalogs", () => {
+    assert.ok(CATALOG_RECORD);
     assert.doesNotThrow(() =>
       OpenAIModelListResponseSchema.parse({
         object: "list",
@@ -135,7 +141,7 @@ describe("shared model-gateway schemas", () => {
             owned_by: "databricks",
             name: "GPT Test",
             model_source: "foundation",
-            status: { deprecated: false },
+            catalog: CATALOG_RECORD,
             capabilities: {
               smart_router: false,
               ai_decide: false,
@@ -163,7 +169,7 @@ describe("shared model-gateway schemas", () => {
             display_name: "GPT Test",
             description: "Test model",
             base_instructions: "Act as a coding agent.",
-            status: { deprecated: false },
+            catalog: CATALOG_RECORD,
             supported_reasoning_levels: [{ effort: "high", description: "High" }],
             default_reasoning_level: "high",
             shell_type: "unified_exec",

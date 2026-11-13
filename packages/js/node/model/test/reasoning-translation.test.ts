@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseReasoningModels } from "../src/_metadata-generator.ts";
 import {
   learnReasoningLevelsFromError,
   modelReasoningLevelsFor,
@@ -72,61 +71,9 @@ describe("parseReasoningLevels", () => {
   });
 });
 
-describe("reasoning documentation snapshot", () => {
-  it("parses accepted effort ladders from the Query reasoning models table", () => {
-    const snapshot = parseReasoningModels(
-      `<table>
-        <tr><th>Models</th><th>Reasoning model type</th><th>Details</th><th>Parameters</th></tr>
-        <tr>
-          <td><code>databricks-grok-4-6</code></td>
-          <td>Reasoning only</td>
-          <td>Always reasons.</td>
-          <td>reasoning_effort accepts values of "low", "medium", "high", or "xhigh".</td>
-        </tr>
-        <tr>
-          <td><code>databricks-gpt-6-astra</code></td>
-          <td>Reasoning only</td>
-          <td>Always reasons.</td>
-          <td>Accepted values are low, medium, high, xhigh, and max. none is rejected.</td>
-        </tr>
-        <tr>
-          <td><code>databricks-glm-5-2</code>, <code>databricks-kimi-k3</code></td>
-          <td>Hybrid</td>
-          <td>Varies.</td>
-          <td>Accepted values vary by model. For GLM-5.2, this parameter accepts values of "high" or "max". For Kimi K3, this parameter accepts values of "low", "high", or "max".</td>
-        </tr>
-      </table>`,
-      42,
-    );
-    assert.equal(snapshot.generatedAt, 42);
-    assert.deepEqual(snapshot.catalogue.models["grok-4-6"], [
-      ReasoningLevel.Low,
-      ReasoningLevel.Medium,
-      ReasoningLevel.High,
-      ReasoningLevel.ExtraHigh,
-    ]);
-    assert.deepEqual(snapshot.catalogue.models["gpt-6-astra"], [
-      ReasoningLevel.Low,
-      ReasoningLevel.Medium,
-      ReasoningLevel.High,
-      ReasoningLevel.ExtraHigh,
-      ReasoningLevel.Max,
-    ]);
-    assert.deepEqual(snapshot.catalogue.models["glm-5-2"], [
-      ReasoningLevel.High,
-      ReasoningLevel.Max,
-    ]);
-    assert.deepEqual(snapshot.catalogue.models["kimi-3"], [
-      ReasoningLevel.Low,
-      ReasoningLevel.High,
-      ReasoningLevel.Max,
-    ]);
-  });
-});
-
 describe("committed reasoning catalogue", () => {
-  it("memoizes documented ladders and falls back to family defaults", () => {
-    assert.equal(reasoningModelCatalogue(), reasoningModelCatalogue());
+  it("uses catalog ladders and falls back to family defaults", () => {
+    assert.ok(Object.keys(reasoningModelCatalogue()).length > 0);
     assert.deepEqual(modelReasoningLevelsFor("databricks-grok-4-6"), [
       ReasoningLevel.Low,
       ReasoningLevel.Medium,
