@@ -254,7 +254,7 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
         logoUrl: {
           type: "string",
           description:
-            "Logo image for the header band. Only an http(s): or data: URL renders; other values are dropped because a mail client cannot load them.",
+            "Logo image for the header band. SMTP delivery converts supported data or HTTP(S) images to an embedded PNG.",
         },
         background: { type: "string", description: "Inbox canvas color." },
         surface: { type: "string", description: "Message-card color." },

@@ -403,16 +403,18 @@ email({
     accent: "#FF3621",
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
     name: "Acme",
-    logoUrl: "https://acme.example/logo.svg", // http(s): or data: only
+    logoUrl: "https://acme.example/logo.svg",
   },
 });
 ```
 
 React Email applies the brand through email-safe inline styles. The browser UI's
 `[data-brand]` CSS bridge cannot reach an inbox, so both the delivered document
-and browser preview consume the same `EmailBrand` values directly. A `logoUrl`
-renders when it is an `http(s):`, `data:`, or `cid:` URL. Otherwise the branded
-display name becomes the header mark.
+and browser preview consume the same `EmailBrand` values directly. SMTP delivery
+uses Sharp to convert supported data or HTTP(S) images, including SVG and WebP,
+to a bounded PNG and embeds it as a related attachment. The converted image is
+cached for the process lifetime. If the source cannot be read or converted, the
+styled display name remains as the header mark so email delivery still succeeds.
 
 ## Use the outbox in tests
 

@@ -26,8 +26,8 @@ import { ConfigurationError, ValidationError, type ExecutionResult } from "@data
 import { runPluginExecution } from "@dbx-tools/appkit";
 import { log, directExecutor } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
-import type { EmailBrand } from "@dbx-tools/shared-email-template";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
+import { clearBrandImageCache, inlineEmailBrandImage } from "./_brand-image.ts";
 import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config.ts";
 import {
   EMAIL_SEND_SETTINGS,
@@ -124,6 +124,7 @@ export function setEmailExecutor(execute: EmailExecutor): void {
 export function resetEmailRuntime(): void {
   runtime?.transporter?.close();
   runtime = undefined;
+  clearBrandImageCache();
 }
 
 /**
@@ -289,33 +290,6 @@ function toMailAttachments(
   }));
 }
 
-/** RFC 2392-style identifier used by the HTML and its related logo attachment. */
-const INLINE_BRAND_CID = "dbx-tools-brand-logo@dbx.tools";
-
-function inlineBrandImage(brand: EmailBrand): {
-  brand: EmailBrand;
-  attachment?: NonNullable<SendMailOptions["attachments"]>[number];
-} {
-  const match = /^data:(image\/[^;,]+);base64,([a-z0-9+/=]+)$/i.exec(brand.logoUrl ?? "");
-  if (!match) return { brand };
-  const [, contentType, content] = match;
-  return {
-    brand: { ...brand, logoUrl: `cid:${INLINE_BRAND_CID}` },
-    attachment: {
-      filename:
-        contentType === "image/svg+xml"
-          ? "brand-logo.svg"
-          : contentType === "image/png"
-            ? "brand-logo.png"
-            : "brand-logo",
-      content,
-      encoding: "base64",
-      contentType,
-      cid: INLINE_BRAND_CID,
-    },
-  };
-}
-
 /**
  * Hand one already-validated message to SMTP, or write it to the outbox when
  * no credentials are configured. The half of a send that performs I/O, so it
@@ -346,7 +320,7 @@ async function dispatch(
     );
   }
   const messageAttachments = toMailAttachments(message.attachments);
-  const inlineBrand = inlineBrandImage(config.brand);
+  const inlineBrand = await inlineEmailBrandImage(config.brand, signal);
   const attachments = [
     ...(messageAttachments ?? []),
     ...(inlineBrand.attachment ? [inlineBrand.attachment] : []),

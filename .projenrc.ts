@@ -653,6 +653,7 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
     "nodemailer@^7.0.13",
     "react@catalog:",
     "react-dom@catalog:",
+    "sharp@catalog:",
   );
   p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@catalog:");
 });

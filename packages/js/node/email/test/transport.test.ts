@@ -9,6 +9,7 @@ import {
   type EmailAttachment,
   type EmailMessage,
 } from "@dbx-tools/shared-email";
+import type { EmailBrand } from "@dbx-tools/shared-email-template";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_COUNT,
@@ -145,11 +146,19 @@ describe("caller-supplied plain-text alternative", () => {
   interface CapturedEmail {
     text: string;
     html: string;
-    attachments: Array<{ cid?: string }>;
+    attachments: Array<{
+      cid?: string;
+      content?: string;
+      contentType?: string;
+      encoding?: string;
+    }>;
   }
 
   /** Send through a stubbed SMTP transporter and return the captured payload. */
-  async function captureSend(options?: SendEmailOptions): Promise<CapturedEmail> {
+  async function captureSend(
+    options?: SendEmailOptions,
+    brand?: EmailBrand,
+  ): Promise<CapturedEmail> {
     const saved = { ...process.env };
     delete process.env.EMAIL_OUTBOX_MODE;
     process.env.SMTP_HOST = "smtp.example.com";
@@ -158,16 +167,16 @@ describe("caller-supplied plain-text alternative", () => {
     process.env.EMAIL_FROM = FROM;
     resetEmailRuntime();
     try {
-      const runtime = getEmailRuntime();
+      const runtime = getEmailRuntime(brand ? { brand } : undefined);
       assert.equal(runtime.config.mode, "smtp");
       let captured: CapturedEmail | undefined;
       // The transporter is the seam: everything above it is the code under test.
       (runtime.transporter as unknown as Record<string, unknown>).sendMail = async (payload: {
         text: string;
         html: string;
-        attachments: Array<{ cid?: string }>;
+        attachments?: CapturedEmail["attachments"];
       }) => {
-        captured = payload;
+        captured = { ...payload, attachments: payload.attachments ?? [] };
         return { messageId: "stub" };
       };
       await sendEmail(
@@ -208,6 +217,40 @@ describe("caller-supplied plain-text alternative", () => {
       attachments.some(({ cid }) => cid === "dbx-tools-brand-logo@dbx.tools"),
       true,
     );
+  });
+
+  it("converts a remote SVG to an embedded PNG", async () => {
+    const savedFetch = globalThis.fetch;
+    let requestedUrl: string | undefined;
+    globalThis.fetch = (async (input) => {
+      requestedUrl = String(input);
+      return new Response(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="24"><rect width="80" height="24" fill="#1B3139"/></svg>',
+        { headers: { "content-type": "image/svg+xml" } },
+      );
+    }) as typeof fetch;
+    try {
+      const { attachments, html } = await captureSend(undefined, {
+        accent: "#1B3139",
+        fontFamily: "Arial, sans-serif",
+        name: "Example product",
+        logoUrl: "https://assets.example/logo.svg",
+        website: "https://example.com",
+      });
+      assert.equal(requestedUrl, "https://assets.example/logo.svg");
+      assert.match(html, /src="cid:dbx-tools-brand-logo@dbx\.tools"/);
+      const logo = attachments.find(({ cid }) => cid === "dbx-tools-brand-logo@dbx.tools");
+      assert.equal(logo?.contentType, "image/png");
+      assert.equal(logo?.encoding, "base64");
+      assert.equal(
+        Buffer.from(logo?.content ?? "", "base64")
+          .subarray(1, 4)
+          .toString("ascii"),
+        "PNG",
+      );
+    } finally {
+      globalThis.fetch = savedFetch;
+    }
   });
 
   it("falls back to the generated text part when none is supplied", async () => {

@@ -36,7 +36,8 @@
     "@react-email/render": "catalog:",
     "nodemailer": "^7.0.13",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "sharp": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
