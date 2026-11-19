@@ -3,6 +3,6 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/databricks-zerobus";
-export const PACKAGE_VERSION = "0.9.211";
+export const PACKAGE_VERSION = "0.9.212";
 export * as zerobus from "./src/zerobus.ts";
 export { createSdk, createStream } from "./src/zerobus.ts";

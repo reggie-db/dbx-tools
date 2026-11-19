@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next generation; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/fs";
-export const PACKAGE_VERSION = "0.9.211";
+export const PACKAGE_VERSION = "0.9.212";
 export * as localFS from "./src/local-fs.ts";
 export * as localPath from "./src/local-path.ts";
 export * as osPath from "./src/os-path.ts";
