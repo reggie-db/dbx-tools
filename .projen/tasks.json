@@ -1210,6 +1210,7 @@
             "packages/js/ui/mastra/test/chart-option.test.ts",
             "packages/js/ui/mastra/test/chat-approvals.test.ts",
             "packages/js/ui/mastra/test/chat-feedback.test.ts",
+            "packages/js/ui/mastra/test/chat-prompt-style.test.ts",
             "packages/js/ui/mastra/test/chat-stream.test.ts",
             "packages/js/ui/mastra/test/chat-thread-layout.test.ts",
             "packages/js/ui/mastra/test/chat-transcript-follow.test.ts",

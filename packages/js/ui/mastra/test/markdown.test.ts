@@ -45,6 +45,28 @@ describe("Markdown links", () => {
     assert.match(html, /<button[^>]*data-streamdown="link"/);
     assert.match(html, />https:\/\/example\.com\/docs<\/button>/);
   });
+
+  it("renders missing placeholder link targets as plain text", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantMarkdown, {
+        children: "[Download dummy.txt](undefined)",
+      }),
+    );
+
+    assert.match(html, />Download dummy\.txt<\/p>/);
+    assert.doesNotMatch(html, /Blocked URL|\[blocked\]|data-streamdown="link"/);
+  });
+
+  it("keeps genuinely unsafe link targets non-clickable", () => {
+    const html = renderToStaticMarkup(
+      createElement(AssistantMarkdown, {
+        children: "[Unsafe](javascript:alert(1))",
+      }),
+    );
+
+    assert.match(html, />Unsafe<\/p>/);
+    assert.doesNotMatch(html, /<a|data-streamdown="link"/);
+  });
 });
 
 describe("tool Markdown typography", () => {

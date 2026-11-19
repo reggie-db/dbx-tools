@@ -4,7 +4,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@databricks/appkit-ui/react";
 import { getAuthStatus } from "@dbx-tools/shared-auth";
 import {
@@ -32,6 +31,8 @@ import { z } from "zod";
 const SMART_ROUTER_MODEL = "smart-router";
 const AI_DECIDE_MODEL = "ai-decide";
 const GENIE_VALUE = "__genie__";
+const COMPOSER_ICON_ACTION_CLASS =
+  "size-7 shrink-0 rounded-full border border-input bg-background p-0 shadow-xs hover:bg-accent hover:text-accent-foreground";
 const FALLBACK_SUGGESTIONS = [
   "Explain idempotency in API retries in two concise sentences.",
   "Compare optimistic and pessimistic locking, including when you would choose each.",
@@ -449,12 +450,11 @@ const SmartRouter = () => {
             <>
               <Select value="" onValueChange={addPane}>
                 <SelectTrigger
-                  className="size-7 shrink-0 rounded-full p-0 [&>svg:last-child]:hidden"
+                  className={`${COMPOSER_ICON_ACTION_CLASS} justify-center gap-0 data-[size=default]:h-7 [&>svg:last-child]:hidden [&_svg]:size-3`}
                   aria-label="Add model comparison"
                   title="Add model comparison"
                 >
                   <PlusIcon className="size-3" aria-hidden />
-                  <SelectValue placeholder="" />
                 </SelectTrigger>
                 <SelectContent>
                   {genieAvailable ? <SelectItem value={GENIE_VALUE}>Genie only</SelectItem> : null}
@@ -469,7 +469,11 @@ const SmartRouter = () => {
                 type="button"
                 variant={clearArmed ? "destructive" : "outline"}
                 size="icon"
-                className="size-7 rounded-full [&_svg]:size-3"
+                className={`${COMPOSER_ICON_ACTION_CLASS} [&_svg]:size-3 ${
+                  clearArmed
+                    ? "border-destructive bg-destructive text-white hover:bg-destructive/90"
+                    : ""
+                }`}
                 aria-label={clearArmed ? "Confirm clear all chats" : "Clear all chats"}
                 title={clearArmed ? "Click again to clear all chats" : "Clear all chats"}
                 disabled={running || panes.length === 0}

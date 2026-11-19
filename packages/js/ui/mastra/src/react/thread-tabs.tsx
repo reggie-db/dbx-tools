@@ -10,6 +10,7 @@ import {
 } from "@databricks/appkit-ui/react";
 import { HistoryIcon, Loader2Icon, PlusIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { centeredThreadTabScrollLeft } from "./_thread-tab-scroll.ts";
 import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar.tsx";
 import { threadTitle } from "../support/thread-labels.ts";
 
@@ -151,9 +152,8 @@ export const ThreadActions = ({
  * showing its title, a spinner while it streams in the background, and a close
  * affordance; a trailing `+` starts a fresh conversation and a history button
  * opens the full conversation list (a {@link ThreadSidebar} in a popover) so
- * anything not currently tabbed is one click away. The active tab is scrolled
- * into view when the selection changes, so switching from history never leaves
- * the current conversation off-screen.
+ * anything not currently tabbed is one click away. The active tab is centered
+ * when the selection changes, including conversations opened from history.
  */
 export const ThreadTabs = ({
   openThreadIds,
@@ -175,12 +175,17 @@ export const ThreadTabs = ({
     if (!container || !activeTab) return;
     const containerRect = container.getBoundingClientRect();
     const tabRect = activeTab.getBoundingClientRect();
-    if (tabRect.left < containerRect.left) {
-      container.scrollBy({ left: tabRect.left - containerRect.left, behavior: "smooth" });
-    } else if (tabRect.right > containerRect.right) {
-      container.scrollBy({ left: tabRect.right - containerRect.right, behavior: "smooth" });
-    }
-  }, [activeThreadId]);
+    container.scrollTo({
+      left: centeredThreadTabScrollLeft({
+        currentScrollLeft: container.scrollLeft,
+        viewportWidth: container.clientWidth,
+        scrollWidth: container.scrollWidth,
+        tabLeft: tabRect.left - containerRect.left,
+        tabWidth: tabRect.width,
+      }),
+      behavior: "smooth",
+    });
+  }, [activeThreadId, openThreadIds]);
 
   return (
     // The divider spans the whole chat width while the strip's contents stay

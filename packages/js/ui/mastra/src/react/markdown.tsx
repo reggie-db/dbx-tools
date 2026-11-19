@@ -139,6 +139,33 @@ const MARKDOWN_TABLE_PARTS = {
   },
 };
 
+const BLOCKED_URL_PREFIX = "Blocked URL: ";
+const PLACEHOLDER_LINK_TARGETS = new Set(["undefined", "null"]);
+
+/** Hide renderer diagnostics for model-authored links whose target was never populated. */
+const MarkdownSpan = ({
+  children,
+  title,
+  ...rest
+}: React.HTMLAttributes<HTMLSpanElement> & { node?: MarkdownNode }) => {
+  const blockedTarget = title?.startsWith(BLOCKED_URL_PREFIX)
+    ? title.slice(BLOCKED_URL_PREFIX.length).trim().toLowerCase()
+    : undefined;
+  if (blockedTarget && PLACEHOLDER_LINK_TARGETS.has(blockedTarget)) {
+    const content = React.Children.toArray(children);
+    const last = content.at(-1);
+    if (typeof last === "string") {
+      content[content.length - 1] = last.replace(/\s*\[blocked\]\s*$/, "");
+    }
+    return <>{content}</>;
+  }
+  return (
+    <span title={title} {...rest}>
+      {children}
+    </span>
+  );
+};
+
 /** Chat links keep Streamdown's safety behavior while using a higher-contrast blue. */
 const MARKDOWN_LINK_CLASSES = cn(
   "[&_[data-streamdown=link]]:font-normal [&_[data-streamdown=link]]:text-blue-700",
@@ -158,6 +185,7 @@ const MARKDOWN_LINK_CLASSES = cn(
  */
 const MARKDOWN_COMPONENTS = {
   ...MARKDOWN_TABLE_PARTS,
+  span: MarkdownSpan,
   table: ({
     node,
     children,
@@ -200,6 +228,7 @@ const STREAMING_MARKDOWN_COMPONENTS = {
  */
 const TOOL_MARKDOWN_COMPONENTS = {
   ...MARKDOWN_TABLE_PARTS,
+  span: MarkdownSpan,
   table: plainMarkdownTable,
 };
 

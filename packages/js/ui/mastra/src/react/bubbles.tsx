@@ -31,6 +31,7 @@ import {
   AssistantResponseSpinner,
   shouldShowAssistantResponseStatus,
 } from "./_assistant-response-status.tsx";
+import { CHAT_PROMPT_TEXT_CLASS } from "./_chat-prompt-style.ts";
 import { MarkdownWithEmbeds } from "./embed-slots.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { FeedbackControls } from "./feedback-controls.tsx";
@@ -575,7 +576,7 @@ export const UserBubble = ({ message }: { message: UIMessage }) => {
         <UserAvatar />
       </ItemMedia>
       <ItemContent className="min-w-0">
-        <div className="max-w-full rounded-lg bg-muted p-2 text-sm">
+        <div className={cn("max-w-full rounded-lg bg-muted p-2", CHAT_PROMPT_TEXT_CLASS)}>
           {files.length > 0 && (
             <div className={cn("grid gap-1.5", files.length > 1 && "grid-cols-2")}>
               {files.map((file, index) => (
@@ -589,12 +590,7 @@ export const UserBubble = ({ message }: { message: UIMessage }) => {
             </div>
           )}
           {text && (
-            <div
-              className={cn(
-                "whitespace-pre-wrap break-words px-1 leading-snug sm:leading-normal",
-                files.length > 0 && "pt-2",
-              )}
-            >
+            <div className={cn("whitespace-pre-wrap break-words px-1", files.length > 0 && "pt-2")}>
               {text}
             </div>
           )}

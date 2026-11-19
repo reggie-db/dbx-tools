@@ -1,4 +1,5 @@
 import { Button, cn } from "@databricks/appkit-ui/react";
+import { CHAT_PROMPT_TEXT_CLASS } from "./_chat-prompt-style.ts";
 
 // Shared rendering for suggested questions. Both the initial starter
 // suggestions (above the composer when the transcript is empty) and
@@ -51,7 +52,8 @@ export const SuggestionPills = ({
           size="sm"
           variant="outline"
           className={cn(
-            "h-auto shrink-0 whitespace-normal rounded-2xl px-3 py-1.5 text-left text-xs font-normal leading-snug",
+            "h-auto shrink-0 whitespace-normal rounded-2xl px-3 py-1.5 text-left font-normal",
+            CHAT_PROMPT_TEXT_CLASS,
             orientation === "horizontal"
               ? "max-w-[min(20rem,85vw)] md:max-w-full"
               : "w-full max-w-full justify-start",
