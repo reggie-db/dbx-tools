@@ -12,20 +12,31 @@ describe("Genie images", () => {
       createElement(GenieImageTabs, {
         src: "/original.png",
         data: {
-          columns: ["week", "gallons"],
-          rows: [{ week: "2026-10-04", gallons: 42 }],
+          columns: ["business_week", "fuel_gallons_sold_pspw", "fuel_margin_pspw", "yoy_pct_pspw"],
+          rows: [
+            {
+              business_week: "2026-10-04",
+              fuel_gallons_sold_pspw: 125089.92,
+              fuel_margin_pspw: 50280.31,
+              yoy_pct_pspw: -0.038653328483108824,
+            },
+          ],
           rowCount: 1,
           truncated: false,
           visualization: {
             manifest: {
               schema: {
                 columns: [
-                  { name: "week", type_name: "DATE" },
-                  { name: "gallons", type_name: "DOUBLE" },
+                  { name: "business_week", type_name: "DATE" },
+                  { name: "fuel_gallons_sold_pspw", type_name: "DOUBLE" },
+                  { name: "fuel_margin_pspw", type_name: "DOUBLE" },
+                  { name: "yoy_pct_pspw", type_name: "DOUBLE" },
                 ],
               },
             },
-            result: { data_array: [["2026-10-04", "42"]] },
+            result: {
+              data_array: [["2026-10-04", "125089.92", "50280.31", "-0.038653328483108824"]],
+            },
           },
         },
       }),
@@ -38,7 +49,13 @@ describe("Genie images", () => {
     assert.match(html, /aria-haspopup="dialog"/);
     assert.match(html, /Loading Genie chart/);
     assert.match(html, /2026-10-04/);
-    assert.match(html, /gallons/);
+    assert.match(html, /Business Week/);
+    assert.match(html, /Fuel Gallons Sold PSPW/);
+    assert.match(html, /Fuel Margin PSPW/);
+    assert.match(html, /YoY % PSPW/);
+    assert.match(html, /125,090/);
+    assert.match(html, /\$50,280\.31/);
+    assert.match(html, /-3\.87%/);
     assert.doesNotMatch(html, /<canvas|Change chart type/);
   });
 

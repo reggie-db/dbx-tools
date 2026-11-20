@@ -23,7 +23,7 @@
  * @module
  */
 
-import { capitalize, toLabel, toSlugWithOptions, escapeHtml } from "@dbx-tools/shared-core";
+import { capitalize, toSlugWithOptions, escapeHtml } from "@dbx-tools/shared-core";
 import {
   type Chart,
   type StatementData,
@@ -38,6 +38,11 @@ import { normalizeChartOption } from "./chart-option.ts";
 import { LIGHT_CHART_CHROME } from "./chart-theme.ts";
 import { downloadFile } from "./download.ts";
 import { messageTextFromParts } from "./message-text.ts";
+import {
+  statementCellText,
+  statementColumnLabel,
+  type StatementColumnPresentation,
+} from "./statement-presentation.ts";
 
 /**
  * Output formats {@link exportChat} can produce.
@@ -353,11 +358,19 @@ async function dataTableHtml(
 ): Promise<string | null> {
   const data = await safeStatement(resolver, id, visualization);
   if (!data || data.rows.length === 0) return null;
-  const head = data.columns.map((c) => `<th>${escapeHtml(toLabel(c))}</th>`).join("");
+  const presentation = statementPresentation(data);
+  const head = data.columns
+    .map((column) => `<th>${escapeHtml(statementColumnLabel(column))}</th>`)
+    .join("");
   const body = data.rows
     .map(
       (row) =>
-        `<tr>${data.columns.map((c) => `<td>${escapeHtml(cellText(row[c]))}</td>`).join("")}</tr>`,
+        `<tr>${data.columns
+          .map(
+            (column) =>
+              `<td>${escapeHtml(statementCellText(presentation.get(column) ?? { name: column }, row[column]))}</td>`,
+          )
+          .join("")}</tr>`,
     )
     .join("");
   const note = data.truncated
@@ -425,10 +438,16 @@ async function dataTableMarkdown(
 ): Promise<string | null> {
   const data = await safeStatement(resolver, id, visualization);
   if (!data || data.rows.length === 0) return null;
-  const header = `| ${data.columns.map((c) => mdCell(toLabel(c))).join(" | ")} |`;
+  const presentation = statementPresentation(data);
+  const header = `| ${data.columns.map((column) => mdCell(statementColumnLabel(column))).join(" | ")} |`;
   const sep = `| ${data.columns.map(() => "---").join(" | ")} |`;
   const rows = data.rows.map(
-    (row) => `| ${data.columns.map((c) => mdCell(cellText(row[c]))).join(" | ")} |`,
+    (row) =>
+      `| ${data.columns
+        .map((column) =>
+          mdCell(statementCellText(presentation.get(column) ?? { name: column }, row[column])),
+        )
+        .join(" | ")} |`,
   );
   const note = data.truncated ? `\n\n_Showing ${data.rows.length} of ${data.rowCount} rows._` : "";
   return `${[header, sep, ...rows].join("\n")}${note}`;
@@ -458,11 +477,14 @@ async function safeStatement(
   }
 }
 
-/** Stringify a table cell value for display. */
-function cellText(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+/** Index the manifest's SQL types by the raw result-column names. */
+function statementPresentation(data: StatementData): Map<string, StatementColumnPresentation> {
+  return new Map(
+    data.visualization.manifest.schema.columns.map((column) => [
+      column.name,
+      { name: column.name, typeName: column.type_name },
+    ]),
+  );
 }
 
 /** Escape a Markdown table cell (pipes / newlines would break the row). */

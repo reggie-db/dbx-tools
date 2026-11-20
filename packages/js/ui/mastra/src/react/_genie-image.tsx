@@ -112,6 +112,10 @@ export function GenieImageTabs({
             rows={data.rows}
             rowCount={data.rowCount}
             truncated={data.truncated}
+            statementColumns={data.visualization.manifest.schema.columns.map((column) => ({
+              name: column.name,
+              typeName: column.type_name,
+            }))}
           />
         ) : (
           <p role="status" className="py-3 text-sm text-muted-foreground">

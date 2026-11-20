@@ -31,6 +31,11 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { downloadFile } from "../support/download.ts";
+import {
+  statementCellText,
+  statementColumnLabel,
+  type StatementColumnPresentation,
+} from "../support/statement-presentation.ts";
 
 // Interactive result table plus the cell/label/CSV helpers it and the
 // markdown table renderer share. Built on `@tanstack/react-table` over
@@ -195,6 +200,7 @@ export const DataGrid = ({
   truncated,
   rowCount,
   humanizeHeaders = false,
+  statementColumns,
 }: {
   columns: string[];
   rows: DataRow[];
@@ -206,21 +212,35 @@ export const DataGrid = ({
    * human-authored and would be mangled by the tokenizer.
    */
   humanizeHeaders?: boolean;
+  /**
+   * Statement manifest metadata. When present, cells receive best-effort
+   * Databricks-style number formatting and headers retain analytics acronyms.
+   */
+  statementColumns?: StatementColumnPresentation[];
 }) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
-  const columnDefs = useMemo<ColumnDef<DataRow>[]>(
-    () =>
-      columns.map((col): ColumnDef<DataRow> => ({
+  const columnDefs = useMemo<ColumnDef<DataRow>[]>(() => {
+    const statementColumnByName = new Map(statementColumns?.map((column) => [column.name, column]));
+    return columns.map((col): ColumnDef<DataRow> => {
+      const statementColumn = statementColumnByName.get(col);
+      return {
         id: col,
         accessorFn: (row) => row[col],
-        header: humanizeHeaders ? humanizeLabel(col) : col,
-        cell: (info) => renderDataCell(info.getValue()),
+        header: statementColumn
+          ? statementColumnLabel(col)
+          : humanizeHeaders
+            ? humanizeLabel(col)
+            : col,
+        cell: (info) =>
+          renderDataCell(
+            statementColumn ? statementCellText(statementColumn, info.getValue()) : info.getValue(),
+          ),
         sortUndefined: "last",
-      })),
-    [columns, humanizeHeaders],
-  );
+      };
+    });
+  }, [columns, humanizeHeaders, statementColumns]);
 
   const table = useReactTable({
     data: rows,

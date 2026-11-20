@@ -179,6 +179,10 @@ const DataSlot = ({ statementId }: { statementId: string }) => {
       truncated={data.truncated}
       rowCount={data.rowCount}
       humanizeHeaders
+      statementColumns={data.visualization.manifest.schema.columns.map((column) => ({
+        name: column.name,
+        typeName: column.type_name,
+      }))}
     />
   );
 };

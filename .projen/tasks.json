@@ -1226,6 +1226,7 @@
             "packages/js/ui/mastra/test/model-selection.test.ts",
             "packages/js/ui/mastra/test/request-context.test.ts",
             "packages/js/ui/mastra/test/selected-model-pill.test.ts",
+            "packages/js/ui/mastra/test/statement-presentation.test.ts",
             "packages/js/ui/mastra/test/suggestions.test.ts",
             "packages/js/ui/mastra/test/thoughts-disclosure.test.ts",
             "packages/js/ui/mastra/test/thread-persistence.test.ts",
